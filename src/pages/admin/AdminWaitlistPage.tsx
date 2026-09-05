@@ -741,7 +741,7 @@ export default function AdminWaitlistPage() {
             </button>
 
             <h3 style={{ fontFamily: "Syne", fontSize: 18, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px" }}>
-              Detalhes do Lead
+              Detalhes do Fundador
             </h3>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 14, fontFamily: "DM Sans" }}>
@@ -818,20 +818,13 @@ export default function AdminWaitlistPage() {
                 </div>
               )}
 
-              <div>
-                <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>LGPD Consentimento</span>
-                <div style={{ fontSize: 13, color: "#0DB87E", display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
-                  <ShieldCheck size={16} /> Aceito em {selectedLeadModal.created_at_local}
-                </div>
-              </div>
-
               {/* Observações / Preferências (Parsed para exibir apenas Praias) */}
               {(() => {
                 const praias = extractPraiasFromObservacoes(selectedLeadModal.observacoes);
                 if (!praias) return null;
                 return (
                   <div>
-                    <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Observações / Preferências (Praias)</span>
+                    <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Praias que frequenta</span>
                     <div style={{ fontSize: 13, color: "var(--admin-subtle)", background: "var(--admin-bg)", border: "1px solid var(--admin-border)", padding: 10, borderRadius: 8, marginTop: 4 }}>
                       {praias}
                     </div>
@@ -934,8 +927,16 @@ export default function AdminWaitlistPage() {
                 <GhostButton onClick={() => setSelectedLeadModal(null)}>Fechar</GhostButton>
               </div>
 
-              {/* Telemetria & Aquisição Accordion (Abaixo do bloco ALTERAR STATUS, fechado por padrão) */}
-              <Accordion type="multiple" className="w-full mt-2">
+              {/* LGPD Consentimento - Reposicionado no final do card (após os botões de status) */}
+              <div style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 10, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>LGPD Consentimento</span>
+                <div style={{ fontSize: 12, color: "#0DB87E", display: "flex", alignItems: "center", gap: 4 }}>
+                  <ShieldCheck size={14} /> Aceito em {selectedLeadModal.created_at_local}
+                </div>
+              </div>
+
+              {/* Telemetria & Aquisição Accordion (Abaixo do bloco ALTERAR STATUS e LGPD, fechado por padrão) */}
+              <Accordion type="multiple" className="w-full">
                 {/* UTM & Origin Details */}
                 <AccordionItem value="utms" className="border-t border-zinc-800">
                   <AccordionTrigger className="text-xs uppercase font-bold text-zinc-400 py-3 hover:no-underline hover:text-zinc-200">
