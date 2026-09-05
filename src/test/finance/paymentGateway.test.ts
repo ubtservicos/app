@@ -104,10 +104,12 @@ describe("Cenário A · PIX Intent — Sucesso com Split e Auditoria", () => {
 
       const upsertArgs = (deps.upsertSplitRecord as ReturnType<typeof vi.fn>).mock.calls[0][0];
       expect(upsertArgs.provider_amount).toBe(90.00);
-      expect(upsertArgs.ubt_amount).toBe(5.00);
-      expect(upsertArgs.entity_amount).toBe(2.00);
-      expect(upsertArgs.prize_worker_amount).toBe(1.00);
-      expect(upsertArgs.prize_consumer_amount).toBe(1.00);
+      expect(upsertArgs.ubt_amount).toBe(7.50);
+      expect(upsertArgs.entity_amount).toBe(0.50);
+      expect(upsertArgs.prize_worker_amount).toBe(0.50);
+      expect(upsertArgs.prize_consumer_amount).toBe(0.50);
+      expect(upsertArgs.godparent_tomador_amount).toBe(0.50);
+      expect(upsertArgs.godparent_prestador_amount).toBe(0.50);
       expect(upsertArgs.godparent_amount).toBe(1.00);
     });
 

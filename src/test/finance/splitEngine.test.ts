@@ -28,23 +28,31 @@ describe("UBT Finance — Split Engine (Pure Unit Tests)", () => {
       expect(split.prestador_amount).toBe(90.00);
     });
 
-    it("UBT receives 5% = R$5.00", () => {
-      expect(split.ubt_amount).toBe(5.00);
+    it("UBT receives 7.5% = R$7.50", () => {
+      expect(split.ubt_amount).toBe(7.50);
     });
 
-    it("comunidade receives 2% = R$2.00", () => {
-      expect(split.comunidade_amount).toBe(2.00);
+    it("comunidade receives 0.5% = R$0.50", () => {
+      expect(split.comunidade_amount).toBe(0.50);
     });
 
-    it("prize_trabalhador receives 1% = R$1.00", () => {
-      expect(split.premio_trabalhador).toBe(1.00);
+    it("prize_trabalhador receives 0.5% = R$0.50", () => {
+      expect(split.premio_trabalhador).toBe(0.50);
     });
 
-    it("prize_consumidor receives 1% = R$1.00", () => {
-      expect(split.premio_consumidor).toBe(1.00);
+    it("prize_consumidor receives 0.5% = R$0.50", () => {
+      expect(split.premio_consumidor).toBe(0.50);
     });
 
-    it("padrinho (residual bucket) receives R$1.00", () => {
+    it("padrinho_prestador receives 0.5% = R$0.50", () => {
+      expect(split.padrinho_prestador_amount).toBe(0.50);
+    });
+
+    it("padrinho_tomador (residual bucket) receives 0.5% = R$0.50", () => {
+      expect(split.padrinho_tomador_amount).toBe(0.50);
+    });
+
+    it("padrinho_amount alias equals sum = R$1.00", () => {
       expect(split.padrinho_amount).toBe(1.00);
     });
 
@@ -59,7 +67,8 @@ describe("UBT Finance — Split Engine (Pure Unit Tests)", () => {
         split.comunidade_amount +
         split.premio_trabalhador +
         split.premio_consumidor +
-        split.padrinho_amount;
+        split.padrinho_prestador_amount +
+        split.padrinho_tomador_amount;
       expect(sum).toBeCloseTo(split.total_amount, 2);
     });
 
@@ -83,7 +92,8 @@ describe("UBT Finance — Split Engine (Pure Unit Tests)", () => {
         split.comunidade_amount +
         split.premio_trabalhador +
         split.premio_consumidor +
-        split.padrinho_amount;
+        split.padrinho_prestador_amount +
+        split.padrinho_tomador_amount;
       expect(sum).toBeCloseTo(33.33, 2);
     });
 
@@ -91,7 +101,8 @@ describe("UBT Finance — Split Engine (Pure Unit Tests)", () => {
       expect(split.prestador_amount).toBeGreaterThan(0);
       expect(split.ubt_amount).toBeGreaterThanOrEqual(0);
       expect(split.comunidade_amount).toBeGreaterThanOrEqual(0);
-      expect(split.padrinho_amount).toBeGreaterThanOrEqual(0);
+      expect(split.padrinho_prestador_amount).toBeGreaterThanOrEqual(0);
+      expect(split.padrinho_tomador_amount).toBeGreaterThanOrEqual(0);
     });
   });
 
@@ -107,15 +118,19 @@ describe("UBT Finance — Split Engine (Pure Unit Tests)", () => {
       expect(split.application_fee).toBe(150.00);
     });
 
-    it("ubt receives R$75.00", () => {
-      expect(split.ubt_amount).toBe(75.00);
+    it("ubt receives R$112.50", () => {
+      expect(split.ubt_amount).toBe(112.50);
     });
 
     it("Σ(all buckets) === R$1500.00", () => {
       const sum =
-        split.prestador_amount + split.ubt_amount +
-        split.comunidade_amount + split.premio_trabalhador +
-        split.premio_consumidor + split.padrinho_amount;
+        split.prestador_amount +
+        split.ubt_amount +
+        split.comunidade_amount +
+        split.premio_trabalhador +
+        split.premio_consumidor +
+        split.padrinho_prestador_amount +
+        split.padrinho_tomador_amount;
       expect(sum).toBeCloseTo(1500.00, 2);
     });
   });
@@ -128,7 +143,8 @@ describe("UBT Finance — Split Engine (Pure Unit Tests)", () => {
       comunidade_pct:          5.000,
       premio_trabalhador_pct:  2.000,
       premio_consumidor_pct:   2.000,
-      padrinho_pct:            1.000,
+      padrinho_tomador_pct:    0.500,
+      padrinho_prestador_pct:  0.500,
     };
     const split = calculateSplitAmounts(100.00, customConfig);
 
@@ -142,9 +158,13 @@ describe("UBT Finance — Split Engine (Pure Unit Tests)", () => {
 
     it("Σ still equals total with custom config", () => {
       const sum =
-        split.prestador_amount + split.ubt_amount +
-        split.comunidade_amount + split.premio_trabalhador +
-        split.premio_consumidor + split.padrinho_amount;
+        split.prestador_amount +
+        split.ubt_amount +
+        split.comunidade_amount +
+        split.premio_trabalhador +
+        split.premio_consumidor +
+        split.padrinho_prestador_amount +
+        split.padrinho_tomador_amount;
       expect(sum).toBeCloseTo(100.00, 2);
     });
   });
@@ -171,7 +191,7 @@ describe("UBT Finance — Split Engine (Pure Unit Tests)", () => {
       const bad: SplitConfig = { ...REGULATORY_DEFAULTS, prestador_pct: 80.000 };
       const result = validateSplitConfig(bad);
       expect(result.valid).toBe(false);
-      expect(result.error).toContain("100%");
+      expect(result.error).toContain("100.000%");
     });
 
     it("rejects a config that sums to more than 100%", () => {

@@ -45,11 +45,12 @@ interface MercadoPagoPixResponse {
  */
 interface SplitConfig {
   prestador_pct:          number; // e.g. 90.000
-  ubt_pct:                number; // e.g.  5.000
-  comunidade_pct:         number; // e.g.  2.000
-  premio_trabalhador_pct: number; // e.g.  1.000
-  premio_consumidor_pct:  number; // e.g.  1.000
-  padrinho_pct:           number; // e.g.  1.000
+  ubt_pct:                number; // e.g.  7.500
+  comunidade_pct:         number; // e.g.  0.500
+  premio_trabalhador_pct: number; // e.g.  0.500
+  premio_consumidor_pct:  number; // e.g.  0.500
+  padrinho_tomador_pct:   number; // e.g.  0.500
+  padrinho_prestador_pct: number; // e.g.  0.500
 }
 
 /**
@@ -57,14 +58,16 @@ interface SplitConfig {
  * prestador_amount + platform_fee = total_amount.
  */
 interface SplitAmounts {
-  total_amount:           number;
-  prestador_amount:       number; // Goes to the service provider
-  ubt_amount:             number; // UBT platform cut
-  comunidade_amount:      number; // Community fund
-  premio_trabalhador:     number; // Worker lottery pool
-  premio_consumidor:      number; // Consumer loyalty pool
-  padrinho_amount:        number; // Godparent referral (residual bucket)
-  application_fee:        number; // Sum of all platform cuts sent to Mercado Pago
+  total_amount:              number;
+  prestador_amount:          number; // Goes to the service provider (90%)
+  ubt_amount:                number; // UBT platform cut (7.5%)
+  comunidade_amount:         number; // Community fund (0.5%)
+  premio_trabalhador:        number; // Worker lottery pool (0.5%)
+  premio_consumidor:         number; // Consumer loyalty pool (0.5%)
+  padrinho_tomador_amount:   number; // Godparent tomador (0.5% - residual bucket)
+  padrinho_prestador_amount: number; // Godparent prestador (0.5%)
+  padrinho_amount:           number; // Legacy sum of godparent shares
+  application_fee:           number; // Sum of all platform cuts sent to Mercado Pago
 }
 
 type ServiceType = "mototaxi" | "diarista" | "ambulante";
@@ -101,22 +104,22 @@ async function logAuditEvent({
 // ============================================================
 // SPLIT CONFIG READER — fetches live rules from public.split_config
 // Falls back to the PO's official regulatory defaults if DB is unreachable.
-// The fallback ensures payment can always proceed even during DB hiccups.
 // ============================================================
 const REGULATORY_DEFAULTS: SplitConfig = {
   prestador_pct:          90.000,
-  ubt_pct:                 5.000,
-  comunidade_pct:          2.000,
-  premio_trabalhador_pct:  1.000,
-  premio_consumidor_pct:   1.000,
-  padrinho_pct:            1.000,
+  ubt_pct:                 7.500,
+  comunidade_pct:          0.500,
+  premio_trabalhador_pct:  0.500,
+  premio_consumidor_pct:   0.500,
+  padrinho_tomador_pct:    0.500,
+  padrinho_prestador_pct:  0.500,
 };
 
 async function fetchSplitConfig(): Promise<{ config: SplitConfig; fromDb: boolean }> {
   try {
     const { data, error } = await supabaseAdmin
       .from("split_config")
-      .select("prestador_pct, ubt_pct, comunidade_pct, premio_trabalhador_pct, premio_consumidor_pct, padrinho_pct")
+      .select("prestador_pct, ubt_pct, comunidade_pct, premio_trabalhador_pct, premio_consumidor_pct, padrinho_tomador_pct, padrinho_prestador_pct")
       .eq("id", 1)
       .single();
 
@@ -125,7 +128,18 @@ async function fetchSplitConfig(): Promise<{ config: SplitConfig; fromDb: boolea
       return { config: REGULATORY_DEFAULTS, fromDb: false };
     }
 
-    return { config: data as SplitConfig, fromDb: true };
+    return {
+      config: {
+        prestador_pct:          Number(data.prestador_pct ?? 90.0),
+        ubt_pct:                Number(data.ubt_pct ?? 7.5),
+        comunidade_pct:         Number(data.comunidade_pct ?? 0.5),
+        premio_trabalhador_pct: Number(data.premio_trabalhador_pct ?? 0.5),
+        premio_consumidor_pct:  Number(data.premio_consumidor_pct ?? 0.5),
+        padrinho_tomador_pct:   Number(data.padrinho_tomador_pct ?? 0.5),
+        padrinho_prestador_pct: Number(data.padrinho_prestador_pct ?? 0.5),
+      },
+      fromDb: true
+    };
   } catch (err) {
     console.error("[payment-gateway] Error fetching split_config — using regulatory defaults:", err);
     return { config: REGULATORY_DEFAULTS, fromDb: false };
@@ -134,34 +148,38 @@ async function fetchSplitConfig(): Promise<{ config: SplitConfig; fromDb: boolea
 
 // ============================================================
 // SPLIT CALCULATOR — cent-precise with residual bucket
-// The `padrinho_amount` absorbs floating-point rounding drift so that
+// The `padrinho_tomador_amount` absorbs floating-point rounding drift so that
 // the sum of all parts ALWAYS equals `total_amount` exactly.
 // ============================================================
 function calculateSplitAmounts(totalAmount: number, config: SplitConfig): SplitAmounts {
   const r = (v: number) => Math.round(v * 100) / 100; // round to 2 decimal places
 
-  const prestador_amount   = r(totalAmount * (config.prestador_pct          / 100));
-  const ubt_amount         = r(totalAmount * (config.ubt_pct                / 100));
-  const comunidade_amount  = r(totalAmount * (config.comunidade_pct         / 100));
-  const premio_trabalhador = r(totalAmount * (config.premio_trabalhador_pct / 100));
-  const premio_consumidor  = r(totalAmount * (config.premio_consumidor_pct  / 100));
+  const prestador_amount          = r(totalAmount * (config.prestador_pct          / 100));
+  const ubt_amount                = r(totalAmount * (config.ubt_pct                / 100));
+  const comunidade_amount         = r(totalAmount * (config.comunidade_pct         / 100));
+  const premio_trabalhador        = r(totalAmount * (config.premio_trabalhador_pct / 100));
+  const premio_consumidor         = r(totalAmount * (config.premio_consumidor_pct  / 100));
+  const padrinho_prestador_amount = r(totalAmount * (config.padrinho_prestador_pct / 100));
 
-  // Residual bucket: padrinho absorbs any rounding drift to guarantee total integrity
-  const sumBeforePadrinho = r(prestador_amount + ubt_amount + comunidade_amount + premio_trabalhador + premio_consumidor);
-  const padrinho_amount   = r(Math.max(0, totalAmount - sumBeforePadrinho));
+  // Residual bucket: padrinho_tomador absorbs any rounding drift to guarantee total integrity
+  const sumBeforeResidual = r(
+    prestador_amount + ubt_amount + comunidade_amount + premio_trabalhador + premio_consumidor + padrinho_prestador_amount
+  );
+  const padrinho_tomador_amount = r(Math.max(0, totalAmount - sumBeforeResidual));
 
-  // application_fee = everything the marketplace retains (MP will split this internally or release to marketplace account)
-  // = total - provider_amount — this is sent to Mercado Pago Payments API
+  // application_fee = everything the marketplace retains sent to Mercado Pago
   const application_fee = r(totalAmount - prestador_amount);
 
   return {
-    total_amount: totalAmount,
+    total_amount:              totalAmount,
     prestador_amount,
     ubt_amount,
     comunidade_amount,
     premio_trabalhador,
     premio_consumidor,
-    padrinho_amount,
+    padrinho_tomador_amount,
+    padrinho_prestador_amount,
+    padrinho_amount:           r(padrinho_tomador_amount + padrinho_prestador_amount),
     application_fee,
   };
 }
@@ -177,33 +195,39 @@ async function persistSplitRecord({
   serviceId,
   split,
   entityId,
-  godparentId,
+  godparentTomadorId,
+  godparentPrestadorId,
 }: {
-  transactionId:  string;
-  serviceType:    ServiceType;
-  serviceId:      string;
-  split:          SplitAmounts;
-  entityId?:      string | null;
-  godparentId?:   string | null;
+  transactionId:         string;
+  serviceType:           ServiceType;
+  serviceId:             string;
+  split:                 SplitAmounts;
+  entityId?:             string | null;
+  godparentTomadorId?:   string | null;
+  godparentPrestadorId?: string | null;
 }): Promise<{ persisted: boolean; error?: string }> {
   try {
     const { error } = await supabaseAdmin.from("pagamentos_split").upsert(
       {
-        transaction_id:         transactionId,
-        status:                 "pending",
-        service_type:           serviceType,
-        service_id:             serviceId,
-        total_amount:           split.total_amount,
-        provider_amount:        split.prestador_amount,
-        ubt_amount:             split.ubt_amount,
-        entity_amount:          split.comunidade_amount,
-        entity_id:              entityId ?? null,
-        prize_worker_amount:    split.premio_trabalhador,
-        prize_consumer_amount:  split.premio_consumidor,
-        godparent_amount:       split.padrinho_amount,
-        godparent_id:           godparentId ?? null,
-        refunded_amount:        0.00,
-        updated_at:             new Date().toISOString(),
+        transaction_id:             transactionId,
+        status:                     "pending",
+        service_type:               serviceType,
+        service_id:                 serviceId,
+        total_amount:               split.total_amount,
+        provider_amount:            split.prestador_amount,
+        ubt_amount:                 split.ubt_amount,
+        entity_amount:              split.comunidade_amount,
+        entity_id:                  entityId ?? null,
+        prize_worker_amount:        split.premio_trabalhador,
+        prize_consumer_amount:      split.premio_consumidor,
+        godparent_tomador_amount:   split.padrinho_tomador_amount,
+        godparent_tomador_id:       godparentTomadorId ?? null,
+        godparent_prestador_amount: split.padrinho_prestador_amount,
+        godparent_prestador_id:     godparentPrestadorId ?? null,
+        godparent_amount:           split.padrinho_amount,
+        godparent_id:               godparentTomadorId ?? null,
+        refunded_amount:            0.00,
+        updated_at:                 new Date().toISOString(),
       },
       {
         onConflict:      "transaction_id",

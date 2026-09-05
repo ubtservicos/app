@@ -35,19 +35,23 @@ export interface AuditLogEntry {
 }
 
 export interface SplitRecord {
-  transaction_id:       string;
-  status:               string;
-  service_type:         ServiceType;
-  service_id:           string;
-  total_amount:         number;
-  provider_amount:      number;
-  ubt_amount:           number;
-  entity_amount:        number;
-  prize_worker_amount:  number;
-  prize_consumer_amount: number;
-  godparent_amount:     number;
-  entity_id?:           string | null;
-  godparent_id?:        string | null;
+  transaction_id:             string;
+  status:                     string;
+  service_type:               ServiceType;
+  service_id:                 string;
+  total_amount:               number;
+  provider_amount:            number;
+  ubt_amount:                 number;
+  entity_amount:              number;
+  prize_worker_amount:        number;
+  prize_consumer_amount:      number;
+  godparent_amount?:          number;
+  godparent_tomador_amount?:  number;
+  godparent_prestador_amount?: number;
+  entity_id?:                 string | null;
+  godparent_id?:              string | null;
+  godparent_tomador_id?:      string | null;
+  godparent_prestador_id?:    string | null;
 }
 
 export interface MpPixResponse {
@@ -169,19 +173,23 @@ export async function runPaymentGateway(
     // --- Persist split record ---
     const transactionId = req.external_reference ?? `mp_${mpData.id}`;
     const splitRecord: SplitRecord = {
-      transaction_id:        transactionId,
-      status:                "pending",
-      service_type:          req.service_type,
-      service_id:            req.service_id,
-      total_amount:          split.total_amount,
-      provider_amount:       split.prestador_amount,
-      ubt_amount:            split.ubt_amount,
-      entity_amount:         split.comunidade_amount,
-      prize_worker_amount:   split.premio_trabalhador,
-      prize_consumer_amount: split.premio_consumidor,
-      godparent_amount:      split.padrinho_amount,
-      entity_id:             req.entity_id ?? null,
-      godparent_id:          req.godparent_id ?? null,
+      transaction_id:             transactionId,
+      status:                     "pending",
+      service_type:               req.service_type,
+      service_id:                 req.service_id,
+      total_amount:               split.total_amount,
+      provider_amount:            split.prestador_amount,
+      ubt_amount:                 split.ubt_amount,
+      entity_amount:              split.comunidade_amount,
+      prize_worker_amount:        split.premio_trabalhador,
+      prize_consumer_amount:      split.premio_consumidor,
+      godparent_amount:           split.padrinho_amount,
+      godparent_tomador_amount:   split.padrinho_tomador_amount,
+      godparent_prestador_amount: split.padrinho_prestador_amount,
+      entity_id:                  req.entity_id ?? null,
+      godparent_id:               req.godparent_id ?? null,
+      godparent_tomador_id:       req.godparent_tomador_id ?? null,
+      godparent_prestador_id:     req.godparent_prestador_id ?? null,
     };
 
     const { ok: splitOk, error: splitError } = await deps.upsertSplitRecord(splitRecord);

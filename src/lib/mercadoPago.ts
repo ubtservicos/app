@@ -14,8 +14,12 @@ export interface SplitResult {
   prestador: number;
   ubt: number;
   comunidade: number;
-  premios: number;
-  associacao: number;
+  premioTrabalhador: number;
+  premioConsumidor: number;
+  padrinhoTomador: number;
+  padrinhoPrestador: number;
+  premios?: number;
+  associacao?: number;
 }
 
 export interface PreferenceResponse {
@@ -28,23 +32,38 @@ export interface PreferenceResponse {
 /**
  * Calculates the exact split rates based on the total transaction amount.
  * Rounded to 2 decimal places to maintain cent-precision.
+ * New Split Rules:
+ * - Prestador: 90.0%
+ * - UBT: 7.5%
+ * - Comunidade: 0.5%
+ * - Prêmio Trabalhador: 0.5%
+ * - Prêmio Consumidor: 0.5%
+ * - Padrinho Prestador: 0.5%
+ * - Padrinho Tomador: 0.5% (Residual Bucket)
  */
 export function calculateSplit(total: number): SplitResult {
   const prestador = +(total * 0.90).toFixed(2);
-  const ubt = +(total * 0.04).toFixed(2);
-  const comunidade = +(total * 0.02).toFixed(2);
-  const premios = +(total * 0.03).toFixed(2);
-  // Ensure math balance with association/padrinho as residual subtraction to avoid roundings leakage
-  const sumPartials = +(prestador + ubt + comunidade + premios).toFixed(2);
-  const associacao = +(total - sumPartials).toFixed(2);
+  const ubt = +(total * 0.075).toFixed(2);
+  const comunidade = +(total * 0.005).toFixed(2);
+  const premioTrabalhador = +(total * 0.005).toFixed(2);
+  const premioConsumidor = +(total * 0.005).toFixed(2);
+  const padrinhoPrestador = +(total * 0.005).toFixed(2);
+
+  // Residual subtraction on Padrinho Tomador to avoid roundings leakage
+  const sumPartials = +(prestador + ubt + comunidade + premioTrabalhador + premioConsumidor + padrinhoPrestador).toFixed(2);
+  const padrinhoTomador = +(total - sumPartials).toFixed(2);
 
   return {
     total,
     prestador,
     ubt,
     comunidade,
-    premios,
-    associacao: associacao >= 0 ? associacao : 0
+    premioTrabalhador,
+    premioConsumidor,
+    padrinhoTomador: padrinhoTomador >= 0 ? padrinhoTomador : 0,
+    padrinhoPrestador,
+    premios: +(premioTrabalhador + premioConsumidor).toFixed(2),
+    associacao: +(padrinhoTomador + padrinhoPrestador).toFixed(2),
   };
 }
 

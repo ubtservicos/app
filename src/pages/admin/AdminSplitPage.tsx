@@ -5,15 +5,16 @@ import { Card, PrimaryButton } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
 
-type SplitKey = "prestador" | "ubt" | "comunidade" | "premioTrabalhador" | "premioConsumidor" | "padrinho";
+type SplitKey = "prestador" | "ubt" | "comunidade" | "premioTrabalhador" | "premioConsumidor" | "padrinhoTomador" | "padrinhoPrestador";
 
 const SPLIT_CONFIG: { key: SplitKey; label: string; Icon: any; color: string }[] = [
   { key: "prestador", label: "Prestador", Icon: User, color: "#0DB87E" },
-  { key: "ubt", label: "UBT", Icon: Building2, color: "#F5A623" },
-  { key: "comunidade", label: "Comunidade", Icon: Users, color: "#2B6EE8" },
+  { key: "ubt", label: "UBT (Take Rate)", Icon: Building2, color: "#F5A623" },
+  { key: "comunidade", label: "Comunidade / Social", Icon: Users, color: "#2B6EE8" },
   { key: "premioTrabalhador", label: "Prêmio Trabalhador", Icon: Gift, color: "#9B59B6" },
   { key: "premioConsumidor", label: "Prêmio Consumidor", Icon: Star, color: "#E84040" },
-  { key: "padrinho", label: "Padrinho/Madrinha", Icon: Heart, color: "#0DB87E" },
+  { key: "padrinhoTomador", label: "Padrinho Tomador", Icon: Heart, color: "#0DB87E" },
+  { key: "padrinhoPrestador", label: "Padrinho Prestador", Icon: Heart, color: "#10B981" },
 ];
 
 const formatBR = (n: number) =>
@@ -25,26 +26,29 @@ export default function AdminSplitPage() {
   const highlight = searchParams.get("highlight");
 
   const [split, setSplit] = useState<Record<SplitKey, number>>({
-    prestador: 90,
-    ubt: 5,
-    comunidade: 2,
-    premioTrabalhador: 1,
-    premioConsumidor: 1,
-    padrinho: 1,
+    prestador: 90.0,
+    ubt: 7.5,
+    comunidade: 0.5,
+    premioTrabalhador: 0.5,
+    premioConsumidor: 0.5,
+    padrinhoTomador: 0.5,
+    padrinhoPrestador: 0.5,
   });
   const [pixKeys, setPixKeys] = useState<Record<string, string>>({
     ubt: "12.345.678/0001-90",
     comunidade: "",
     premioTrabalhador: "",
     premioConsumidor: "",
-    padrinho: "",
+    padrinhoTomador: "",
+    padrinhoPrestador: "",
   });
   const [pixTypes, setPixTypes] = useState<Record<string, string>>({
     ubt: "cnpj",
     comunidade: "cnpj",
     premioTrabalhador: "aleatoria",
     premioConsumidor: "aleatoria",
-    padrinho: "cpf",
+    padrinhoTomador: "cpf",
+    padrinhoPrestador: "cpf",
   });
 
   const [totalTrabalhadorTickets, setTotalTrabalhadorTickets] = useState(0);
@@ -81,8 +85,8 @@ export default function AdminSplitPage() {
 
     const fetchData = async () => {
       try {
-        let trabSplit = 1.5;
-        let consSplit = 1.5;
+        let trabSplit = 0.5;
+        let consSplit = 0.5;
 
         // Fetch primary split_config from Supabase
         const { data: dbSplitConfig, error: dbSplitError } = await supabase
@@ -93,12 +97,13 @@ export default function AdminSplitPage() {
 
         if (!dbSplitError && dbSplitConfig) {
           const loadedSplit = {
-            prestador: Number(dbSplitConfig.prestador_pct),
-            ubt: Number(dbSplitConfig.ubt_pct),
-            comunidade: Number(dbSplitConfig.comunidade_pct),
-            premioTrabalhador: Number(dbSplitConfig.premio_trabalhador_pct),
-            premioConsumidor: Number(dbSplitConfig.premio_consumidor_pct),
-            padrinho: Number(dbSplitConfig.padrinho_pct),
+            prestador: Number(dbSplitConfig.prestador_pct ?? 90.0),
+            ubt: Number(dbSplitConfig.ubt_pct ?? 7.5),
+            comunidade: Number(dbSplitConfig.comunidade_pct ?? 0.5),
+            premioTrabalhador: Number(dbSplitConfig.premio_trabalhador_pct ?? 0.5),
+            premioConsumidor: Number(dbSplitConfig.premio_consumidor_pct ?? 0.5),
+            padrinhoTomador: Number(dbSplitConfig.padrinho_tomador_pct ?? (dbSplitConfig.padrinho_pct ? Number(dbSplitConfig.padrinho_pct) / 2 : 0.5)),
+            padrinhoPrestador: Number(dbSplitConfig.padrinho_prestador_pct ?? (dbSplitConfig.padrinho_pct ? Number(dbSplitConfig.padrinho_pct) / 2 : 0.5)),
           };
           setSplit(loadedSplit);
           trabSplit = loadedSplit.premioTrabalhador;
@@ -203,7 +208,9 @@ export default function AdminSplitPage() {
           comunidade_pct: split.comunidade,
           premio_trabalhador_pct: split.premioTrabalhador,
           premio_consumidor_pct: split.premioConsumidor,
-          padrinho_pct: split.padrinho,
+          padrinho_tomador_pct: split.padrinhoTomador,
+          padrinho_prestador_pct: split.padrinhoPrestador,
+          padrinho_pct: Number(split.padrinhoTomador || 0) + Number(split.padrinhoPrestador || 0),
           updated_at: new Date().toISOString()
         })
         .eq("id", 1);

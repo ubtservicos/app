@@ -122,10 +122,12 @@ export default function AdminFinanceiroPage() {
   // Simulation settings (sliders state)
   const [simSplit, setSimSplit] = useState({
     prestador: 90.0,
-    ubt: 4.0,
-    premioTrab: 1.5,
-    premioCons: 1.5,
-    entidades: 2.0
+    ubt: 7.5,
+    premioTrab: 0.5,
+    premioCons: 0.5,
+    entidades: 0.5,
+    padrinhoTomador: 0.5,
+    padrinhoPrestador: 0.5
   });
 
   useEffect(() => {
@@ -309,6 +311,8 @@ export default function AdminFinanceiroPage() {
 
     const collectiveDonations = releasedSplits.filter(s => s.recipient_role === "comunidade").reduce((acc, s) => acc + Number(s.amount || 0), 0);
     const providerVolume = releasedSplits.filter(s => s.recipient_role === "provider").reduce((acc, s) => acc + Number(s.amount || 0), 0);
+    const godparentTomador = releasedSplits.filter(s => s.recipient_role === "godparent_tomador" || s.recipient_role === "padrinho_tomador").reduce((acc, s) => acc + Number(s.amount || 0), 0);
+    const godparentPrestador = releasedSplits.filter(s => s.recipient_role === "godparent_prestador" || s.recipient_role === "padrinho_prestador").reduce((acc, s) => acc + Number(s.amount || 0), 0);
 
     return {
       totalGmv,
@@ -317,7 +321,9 @@ export default function AdminFinanceiroPage() {
       platformRevenue,
       awardsAccumulated,
       collectiveDonations,
-      providerVolume
+      providerVolume,
+      godparentTomador,
+      godparentPrestador
     };
   }, [periodFilteredTransactions, splits]);
 
@@ -352,7 +358,7 @@ export default function AdminFinanceiroPage() {
   // Calculations for simulated split
   const simulatedTotals = useMemo(() => {
     const gmv = financialTotals.totalGmv;
-    const sum = simSplit.prestador + simSplit.ubt + simSplit.premioTrab + simSplit.premioCons + simSplit.entidades;
+    const sum = simSplit.prestador + simSplit.ubt + simSplit.premioTrab + simSplit.premioCons + simSplit.entidades + simSplit.padrinhoTomador + simSplit.padrinhoPrestador;
     const isValid = Math.abs(sum - 100.0) < 0.01;
 
     return {
@@ -362,7 +368,9 @@ export default function AdminFinanceiroPage() {
       ubtVal: (gmv * simSplit.ubt) / 100,
       premioTrabVal: (gmv * simSplit.premioTrab) / 100,
       premioConsVal: (gmv * simSplit.premioCons) / 100,
-      entidadesVal: (gmv * simSplit.entidades) / 100
+      entidadesVal: (gmv * simSplit.entidades) / 100,
+      padrinhoTomadorVal: (gmv * simSplit.padrinhoTomador) / 100,
+      padrinhoPrestadorVal: (gmv * simSplit.padrinhoPrestador) / 100
     };
   }, [financialTotals, simSplit]);
 
@@ -439,10 +447,12 @@ export default function AdminFinanceiroPage() {
   const resetSliders = () => {
     setSimSplit({
       prestador: 90.0,
-      ubt: 4.0,
-      premioTrab: 1.5,
-      premioCons: 1.5,
-      entidades: 2.0
+      ubt: 7.5,
+      premioTrab: 0.5,
+      premioCons: 0.5,
+      entidades: 0.5,
+      padrinhoTomador: 0.5,
+      padrinhoPrestador: 0.5
     });
     toast.show("Percentuais restaurados ao padrão UBT.");
   };
@@ -674,7 +684,9 @@ export default function AdminFinanceiroPage() {
                 { key: "ubt", label: "Taxa UBT (Plataforma)", color: "#0DB87E" },
                 { key: "premioTrab", label: "Prêmio Trabalhador (1/5)", color: "#9B59B6" },
                 { key: "premioCons", label: "Prêmio Consumidor (1/11)", color: "#2B6EE8" },
-                { key: "entidades", label: "Entidades Coletivo", color: "#F5A623" }
+                { key: "entidades", label: "Entidades Coletivo / Social", color: "#F5A623" },
+                { key: "padrinhoTomador", label: "Padrinho Tomador", color: "#0DB87E" },
+                { key: "padrinhoPrestador", label: "Padrinho Prestador", color: "#10B981" }
               ].map((slider) => {
                 const val = simSplit[slider.key as keyof typeof simSplit];
                 return (
@@ -748,7 +760,9 @@ export default function AdminFinanceiroPage() {
                   { label: "Plataforma UBT", simVal: simulatedTotals.ubtVal, defaultVal: financialTotals.platformRevenue, color: "#0DB87E", pct: simSplit.ubt },
                   { label: "Prêmio Trabalhador", simVal: simulatedTotals.premioTrabVal, defaultVal: financialTotals.awardsAccumulated * 0.5, color: "#9B59B6", pct: simSplit.premioTrab },
                   { label: "Prêmio Consumidor", simVal: simulatedTotals.premioConsVal, defaultVal: financialTotals.awardsAccumulated * 0.5, color: "#2B6EE8", pct: simSplit.premioCons },
-                  { label: "Coletivo (ONGs)", simVal: simulatedTotals.entidadesVal, defaultVal: financialTotals.collectiveDonations, color: "#F5A623", pct: simSplit.entidades }
+                  { label: "Coletivo (ONGs)", simVal: simulatedTotals.entidadesVal, defaultVal: financialTotals.collectiveDonations, color: "#F5A623", pct: simSplit.entidades },
+                  { label: "Padrinho Tomador", simVal: simulatedTotals.padrinhoTomadorVal, defaultVal: financialTotals.godparentTomador, color: "#0DB87E", pct: simSplit.padrinhoTomador },
+                  { label: "Padrinho Prestador", simVal: simulatedTotals.padrinhoPrestadorVal, defaultVal: financialTotals.godparentPrestador, color: "#10B981", pct: simSplit.padrinhoPrestador }
                 ].map((p, idx) => (
                   <div key={idx} style={{ background: "var(--admin-bg)", border: "1px solid var(--admin-bg)", borderRadius: 12, padding: 14 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
