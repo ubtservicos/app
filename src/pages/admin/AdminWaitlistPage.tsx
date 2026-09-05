@@ -14,9 +14,16 @@ import {
   Link,
   Smartphone,
   Globe,
-  ShieldCheck
+  ShieldCheck,
+  XCircle
 } from "lucide-react";
 import { Card, PageTitle, Pill, GhostButton } from "@/components/admin/ui";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
 
@@ -58,6 +65,21 @@ interface WaitlistStats {
 
 const PAGE_SIZE = 15;
 
+const extractPraiasFromObservacoes = (obs: string | null): string | null => {
+  if (!obs) return null;
+  const praiasMatch = obs.match(/Praias:\s*([^|]+)/i);
+  if (praiasMatch && praiasMatch[1]?.trim()) {
+    return praiasMatch[1].trim();
+  }
+  const partsWithoutBairros = obs
+    .split("|")
+    .map((p) => p.trim())
+    .filter((p) => !p.toLowerCase().startsWith("bairro:") && !p.toLowerCase().startsWith("bairros:"))
+    .join(" | ")
+    .trim();
+  return partsWithoutBairros.length > 0 ? partsWithoutBairros : null;
+};
+
 export default function AdminWaitlistPage() {
   const toast = useAdminToast();
   const [leads, setLeads] = useState<WaitlistItem[]>([]);
@@ -81,6 +103,17 @@ export default function AdminWaitlistPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLeadModal, setSelectedLeadModal] = useState<WaitlistItem | null>(null);
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+
+  // Close modal on Escape key press
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && selectedLeadModal) {
+        setSelectedLeadModal(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedLeadModal]);
 
   const handleApproveLeads = async (leadIds: string[], motivo = "Aprovação operacional de fila de espera") => {
     setUpdatingStatus(true);
@@ -403,7 +436,9 @@ export default function AdminWaitlistPage() {
               <option value="Todos">Todos</option>
               <option value="novo">Novo</option>
               <option value="contatado">Contatado</option>
+              <option value="rejeitado">Rejeitado</option>
               <option value="arquivado">Arquivado</option>
+              <option value="approved">Aprovado</option>
             </select>
           </div>
 
@@ -610,6 +645,7 @@ export default function AdminWaitlistPage() {
                     <td style={{ padding: "12px 16px" }}>
                       {lead.status === "novo" && <Pill bg="rgba(43,110,232,0.08)" color="#2B6EE8" size="sm">Novo</Pill>}
                       {lead.status === "contatado" && <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E" size="sm">Contatado</Pill>}
+                      {lead.status === "rejeitado" && <Pill bg="rgba(239,68,68,0.08)" color="#EF4444" size="sm">Rejeitado</Pill>}
                       {lead.status === "arquivado" && <Pill bg="rgba(148,163,184,0.08)" color="var(--admin-subtle)" size="sm">Arquivado</Pill>}
                       {lead.status === "approved" && <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E" size="sm">Aprovado</Pill>}
                     </td>
@@ -673,8 +709,30 @@ export default function AdminWaitlistPage() {
 
       {/* Detail Modal */}
       {selectedLeadModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.6)", zIndex: 999, display: "flex", alignItems: "center", justifySelf: "stretch", justifyContent: "center", padding: 20 }}>
-          <Card style={{ width: "100%", maxWidth: 540, maxHeight: "90vh", overflowY: "auto", padding: 24, position: "relative" }}>
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setSelectedLeadModal(null);
+            }
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15,23,42,0.70)",
+            backdropFilter: "blur(4px)",
+            zIndex: 999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20
+          }}
+        >
+          <Card
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: "100%", maxWidth: 540, maxHeight: "90vh", overflowY: "auto", padding: 24, position: "relative" }}
+          >
             <button
               onClick={() => setSelectedLeadModal(null)}
               style={{ position: "absolute", top: 18, right: 18, background: "none", border: "none", cursor: "pointer" }}
@@ -767,84 +825,107 @@ export default function AdminWaitlistPage() {
                 </div>
               </div>
 
-              {selectedLeadModal.observacoes && (
-                <div>
-                  <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Observações / Preferências</span>
-                  <div style={{ fontSize: 13, color: "var(--admin-subtle)", background: "var(--admin-bg)", border: "1px solid var(--admin-border)", padding: 10, borderRadius: 8, marginTop: 4 }}>
-                    {selectedLeadModal.observacoes}
+              {/* Observações / Preferências (Parsed para exibir apenas Praias) */}
+              {(() => {
+                const praias = extractPraiasFromObservacoes(selectedLeadModal.observacoes);
+                if (!praias) return null;
+                return (
+                  <div>
+                    <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Observações / Preferências (Praias)</span>
+                    <div style={{ fontSize: 13, color: "var(--admin-subtle)", background: "var(--admin-bg)", border: "1px solid var(--admin-border)", padding: 10, borderRadius: 8, marginTop: 4 }}>
+                      {praias}
+                    </div>
                   </div>
-                </div>
-              )}
-
-              {/* UTM & Origin Details */}
-              <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 14 }}>
-                <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 700, display: "block", marginBottom: 6 }}>Informações de Aquisição (UTMs)</span>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px", fontSize: 12, background: "var(--admin-bg)", border: "1px solid var(--admin-border)", padding: 12, borderRadius: 8, fontFamily: "monospace" }}>
-                  <div>Source: <span style={{ color: "var(--admin-text)" }}>{selectedLeadModal.utm_source || "—"}</span></div>
-                  <div>Medium: <span style={{ color: "var(--admin-text)" }}>{selectedLeadModal.utm_medium || "—"}</span></div>
-                  <div>Campaign: <span style={{ color: "var(--admin-text)" }}>{selectedLeadModal.utm_campaign || "—"}</span></div>
-                  <div>Content: <span style={{ color: "var(--admin-text)" }}>{selectedLeadModal.utm_content || "—"}</span></div>
-                  <div style={{ gridColumn: "span 2" }}>Referer: <span style={{ color: "var(--admin-text)" }}>{selectedLeadModal.referer || "—"}</span></div>
-                  <div style={{ gridColumn: "span 2" }}>Indicação Padrinho: <span style={{ color: "#EC4899" }}>{selectedLeadModal.origem || "direto"}</span></div>
-                </div>
-              </div>
-
-              {/* Device Metadados */}
-              <div>
-                <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Dados de Conexão (Anônimos)</span>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px", fontSize: 12, color: "var(--admin-subtle)", marginTop: 4 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Smartphone size={13} /> {selectedLeadModal.device_type} ({selectedLeadModal.os})</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Globe size={13} /> Browser: {selectedLeadModal.browser}</div>
-                  <div style={{ gridColumn: "span 2", fontSize: 10, fontFamily: "monospace" }}>IP Hash (SHA-256): {selectedLeadModal.ip_hash}</div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Status Update Options */}
-              <div style={{ borderTop: "1px solid #E2E8F0", paddingTop: 14, display: "flex", alignItems: "center", justifySelf: "stretch", justifyContent: "space-between" }}>
+              <div style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 14, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
                 <div>
-                  <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 4 }}>Alterar Status</span>
-                  <div style={{ display: "flex", gap: 6 }}>
+                  <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>Alterar Status</span>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {/* 1. Novo (Neutro) */}
                     <button
                       disabled={updatingStatus || selectedLeadModal.status === "novo"}
                       onClick={() => handleStatusUpdate(selectedLeadModal.id, "novo")}
-                      style={{ padding: "4px 8px", fontSize: 11, borderRadius: 6, border: "1px solid var(--admin-border)", background: selectedLeadModal.status === "novo" ? "var(--admin-bg)" : "#fff", cursor: "pointer", fontWeight: 600 }}
+                      style={{
+                        padding: "6px 12px",
+                        fontSize: 11,
+                        borderRadius: 6,
+                        border: "1px solid var(--admin-border)",
+                        background: selectedLeadModal.status === "novo" ? "rgba(148,163,184,0.2)" : "var(--admin-bg)",
+                        color: "var(--admin-text)",
+                        cursor: selectedLeadModal.status === "novo" ? "default" : "pointer",
+                        fontWeight: 600,
+                        opacity: selectedLeadModal.status === "novo" ? 0.7 : 1,
+                        transition: "all 0.15s ease",
+                      }}
                     >
                       Novo
                     </button>
+
+                    {/* 2. Contatado (Outline / Ghost) */}
                     <button
                       disabled={updatingStatus || selectedLeadModal.status === "contatado"}
                       onClick={() => handleStatusUpdate(selectedLeadModal.id, "contatado")}
-                      style={{ padding: "4px 8px", fontSize: 11, borderRadius: 6, border: "1px solid #0DB87E", background: selectedLeadModal.status === "contatado" ? "rgba(13,184,126,0.1)" : "#fff", color: "#0DB87E", cursor: "pointer", fontWeight: 600 }}
+                      style={{
+                        padding: "6px 12px",
+                        fontSize: 11,
+                        borderRadius: 6,
+                        border: "1px solid #3B82F6",
+                        background: selectedLeadModal.status === "contatado" ? "rgba(59,130,246,0.15)" : "transparent",
+                        color: "#3B82F6",
+                        cursor: selectedLeadModal.status === "contatado" ? "default" : "pointer",
+                        fontWeight: 600,
+                        opacity: selectedLeadModal.status === "contatado" ? 0.7 : 1,
+                        transition: "all 0.15s ease",
+                      }}
                     >
                       Contatado
                     </button>
+
+                    {/* 3. Rejeitar (Destructive / Red) */}
                     <button
-                      disabled={updatingStatus || selectedLeadModal.status === "arquivado"}
-                      onClick={() => handleStatusUpdate(selectedLeadModal.id, "arquivado")}
-                      style={{ padding: "4px 8px", fontSize: 11, borderRadius: 6, border: "1px solid var(--admin-border)", background: selectedLeadModal.status === "arquivado" ? "var(--admin-bg)" : "#fff", cursor: "pointer", fontWeight: 600 }}
+                      disabled={updatingStatus || selectedLeadModal.status === "rejeitado" || selectedLeadModal.status === "arquivado"}
+                      onClick={() => handleStatusUpdate(selectedLeadModal.id, "rejeitado")}
+                      style={{
+                        padding: "6px 12px",
+                        fontSize: 11,
+                        borderRadius: 6,
+                        border: "1px solid #EF4444",
+                        background: (selectedLeadModal.status === "rejeitado" || selectedLeadModal.status === "arquivado") ? "rgba(239,68,68,0.2)" : "rgba(239,68,68,0.08)",
+                        color: "#EF4444",
+                        cursor: (selectedLeadModal.status === "rejeitado" || selectedLeadModal.status === "arquivado") ? "default" : "pointer",
+                        fontWeight: 600,
+                        opacity: (selectedLeadModal.status === "rejeitado" || selectedLeadModal.status === "arquivado") ? 0.7 : 1,
+                        transition: "all 0.15s ease",
+                      }}
                     >
-                      Arquivar
+                      Rejeitar
                     </button>
+
+                    {/* 4. Aprovar Lead (Success / Green) */}
                     {selectedLeadModal.status !== "approved" && (
                       <button
                         type="button"
                         disabled={updatingStatus}
                         onClick={() => handleApproveLeads([selectedLeadModal.id])}
                         style={{
-                          padding: "4px 10px",
+                          padding: "6px 14px",
                           fontSize: 11,
                           borderRadius: 6,
                           border: "1px solid #0DB87E",
                           background: "#0DB87E",
-                          color: "#fff",
+                          color: "#FFFFFF",
                           cursor: "pointer",
                           fontWeight: 600,
                           display: "inline-flex",
                           alignItems: "center",
-                          gap: 4
+                          gap: 5,
+                          transition: "all 0.15s ease",
                         }}
                       >
-                        <CheckCircle size={12} /> Aprovar Lead
+                        <CheckCircle size={13} /> Aprovar Lead
                       </button>
                     )}
                   </div>
@@ -852,6 +933,40 @@ export default function AdminWaitlistPage() {
 
                 <GhostButton onClick={() => setSelectedLeadModal(null)}>Fechar</GhostButton>
               </div>
+
+              {/* Telemetria & Aquisição Accordion (Abaixo do bloco ALTERAR STATUS, fechado por padrão) */}
+              <Accordion type="multiple" className="w-full mt-2">
+                {/* UTM & Origin Details */}
+                <AccordionItem value="utms" className="border-t border-zinc-800">
+                  <AccordionTrigger className="text-xs uppercase font-bold text-zinc-400 py-3 hover:no-underline hover:text-zinc-200">
+                    Informações de Aquisição (UTMs)
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px", fontSize: 12, background: "var(--admin-bg)", border: "1px solid var(--admin-border)", padding: 12, borderRadius: 8, fontFamily: "monospace" }}>
+                      <div>Source: <span style={{ color: "var(--admin-text)" }}>{selectedLeadModal.utm_source || "—"}</span></div>
+                      <div>Medium: <span style={{ color: "var(--admin-text)" }}>{selectedLeadModal.utm_medium || "—"}</span></div>
+                      <div>Campaign: <span style={{ color: "var(--admin-text)" }}>{selectedLeadModal.utm_campaign || "—"}</span></div>
+                      <div>Content: <span style={{ color: "var(--admin-text)" }}>{selectedLeadModal.utm_content || "—"}</span></div>
+                      <div style={{ gridColumn: "span 2" }}>Referer: <span style={{ color: "var(--admin-text)" }}>{selectedLeadModal.referer || "—"}</span></div>
+                      <div style={{ gridColumn: "span 2" }}>Indicação Padrinho: <span style={{ color: "#EC4899" }}>{selectedLeadModal.origem || "direto"}</span></div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+
+                {/* Device Metadados */}
+                <AccordionItem value="telemetry" className="border-t border-zinc-800">
+                  <AccordionTrigger className="text-xs uppercase font-bold text-zinc-400 py-3 hover:no-underline hover:text-zinc-200">
+                    Dados de Conexão (Anônimos)
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px", fontSize: 12, color: "var(--admin-subtle)", marginTop: 4 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Smartphone size={13} /> {selectedLeadModal.device_type} ({selectedLeadModal.os})</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}><Globe size={13} /> Browser: {selectedLeadModal.browser}</div>
+                      <div style={{ gridColumn: "span 2", fontSize: 10, fontFamily: "monospace" }}>IP Hash (SHA-256): {selectedLeadModal.ip_hash}</div>
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
             </div>
           </Card>
         </div>
