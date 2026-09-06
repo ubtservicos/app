@@ -832,99 +832,110 @@ export default function AdminWaitlistPage() {
                 );
               })()}
 
-              {/* Status Update Options */}
-              <div style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 14, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-                <div>
-                  <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 6 }}>Alterar Status</span>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {/* 1. Novo (Neutro) */}
-                    <button
-                      disabled={updatingStatus || selectedLeadModal.status === "novo"}
-                      onClick={() => handleStatusUpdate(selectedLeadModal.id, "novo")}
-                      style={{
-                        padding: "6px 12px",
-                        fontSize: 11,
-                        borderRadius: 6,
-                        border: "1px solid var(--admin-border)",
-                        background: selectedLeadModal.status === "novo" ? "rgba(148,163,184,0.2)" : "var(--admin-bg)",
-                        color: "var(--admin-text)",
-                        cursor: selectedLeadModal.status === "novo" ? "default" : "pointer",
-                        fontWeight: 600,
-                        opacity: selectedLeadModal.status === "novo" ? 0.7 : 1,
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      Novo
-                    </button>
+              {/* Status Update Options - 4 Equal Buttons (25% width each) */}
+              <div style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 14 }}>
+                <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600, display: "block", marginBottom: 8 }}>
+                  Alterar Status
+                </span>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8, width: "100%" }}>
+                  {/* 1. Novo (Neutro) */}
+                  <button
+                    disabled={updatingStatus || selectedLeadModal.status === "novo"}
+                    onClick={() => handleStatusUpdate(selectedLeadModal.id, "novo")}
+                    style={{
+                      padding: "8px 4px",
+                      fontSize: 12,
+                      borderRadius: 6,
+                      border: "1px solid var(--admin-border)",
+                      background: selectedLeadModal.status === "novo" ? "rgba(148,163,184,0.2)" : "var(--admin-bg)",
+                      color: "var(--admin-text)",
+                      cursor: selectedLeadModal.status === "novo" ? "default" : "pointer",
+                      fontWeight: 600,
+                      opacity: selectedLeadModal.status === "novo" ? 0.7 : 1,
+                      transition: "all 0.15s ease",
+                      width: "100%",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    Novo
+                  </button>
 
-                    {/* 2. Contatado (Outline / Ghost) */}
-                    <button
-                      disabled={updatingStatus || selectedLeadModal.status === "contatado"}
-                      onClick={() => handleStatusUpdate(selectedLeadModal.id, "contatado")}
-                      style={{
-                        padding: "6px 12px",
-                        fontSize: 11,
-                        borderRadius: 6,
-                        border: "1px solid #3B82F6",
-                        background: selectedLeadModal.status === "contatado" ? "rgba(59,130,246,0.15)" : "transparent",
-                        color: "#3B82F6",
-                        cursor: selectedLeadModal.status === "contatado" ? "default" : "pointer",
-                        fontWeight: 600,
-                        opacity: selectedLeadModal.status === "contatado" ? 0.7 : 1,
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      Contatado
-                    </button>
+                  {/* 2. Contatado (Outline / Ghost) */}
+                  <button
+                    disabled={updatingStatus || selectedLeadModal.status === "contatado"}
+                    onClick={() => handleStatusUpdate(selectedLeadModal.id, "contatado")}
+                    style={{
+                      padding: "8px 4px",
+                      fontSize: 12,
+                      borderRadius: 6,
+                      border: "1px solid #3B82F6",
+                      background: selectedLeadModal.status === "contatado" ? "rgba(59,130,246,0.15)" : "transparent",
+                      color: "#3B82F6",
+                      cursor: selectedLeadModal.status === "contatado" ? "default" : "pointer",
+                      fontWeight: 600,
+                      opacity: selectedLeadModal.status === "contatado" ? 0.7 : 1,
+                      transition: "all 0.15s ease",
+                      width: "100%",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    Contatado
+                  </button>
 
-                    {/* 3. Rejeitar (Destructive / Red) */}
-                    <button
-                      disabled={updatingStatus || selectedLeadModal.status === "rejeitado" || selectedLeadModal.status === "arquivado"}
-                      onClick={() => handleStatusUpdate(selectedLeadModal.id, "rejeitado")}
-                      style={{
-                        padding: "6px 12px",
-                        fontSize: 11,
-                        borderRadius: 6,
-                        border: "1px solid #EF4444",
-                        background: (selectedLeadModal.status === "rejeitado" || selectedLeadModal.status === "arquivado") ? "rgba(239,68,68,0.2)" : "rgba(239,68,68,0.08)",
-                        color: "#EF4444",
-                        cursor: (selectedLeadModal.status === "rejeitado" || selectedLeadModal.status === "arquivado") ? "default" : "pointer",
-                        fontWeight: 600,
-                        opacity: (selectedLeadModal.status === "rejeitado" || selectedLeadModal.status === "arquivado") ? 0.7 : 1,
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      Rejeitar
-                    </button>
+                  {/* 3. Rejeitar (Destructive / Red) */}
+                  <button
+                    disabled={updatingStatus || selectedLeadModal.status === "rejeitado" || selectedLeadModal.status === "arquivado"}
+                    onClick={() => handleStatusUpdate(selectedLeadModal.id, "rejeitado")}
+                    style={{
+                      padding: "8px 4px",
+                      fontSize: 12,
+                      borderRadius: 6,
+                      border: "1px solid #EF4444",
+                      background: (selectedLeadModal.status === "rejeitado" || selectedLeadModal.status === "arquivado") ? "rgba(239,68,68,0.2)" : "rgba(239,68,68,0.08)",
+                      color: "#EF4444",
+                      cursor: (selectedLeadModal.status === "rejeitado" || selectedLeadModal.status === "arquivado") ? "default" : "pointer",
+                      fontWeight: 600,
+                      opacity: (selectedLeadModal.status === "rejeitado" || selectedLeadModal.status === "arquivado") ? 0.7 : 1,
+                      transition: "all 0.15s ease",
+                      width: "100%",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    Rejeitar
+                  </button>
 
-                    {/* 4. Aprovar Lead (Success / Green) */}
-                    {selectedLeadModal.status !== "approved" && (
-                      <button
-                        type="button"
-                        disabled={updatingStatus}
-                        onClick={() => handleApproveLeads([selectedLeadModal.id])}
-                        style={{
-                          padding: "6px 14px",
-                          fontSize: 11,
-                          borderRadius: 6,
-                          border: "1px solid #0DB87E",
-                          background: "#0DB87E",
-                          color: "#FFFFFF",
-                          cursor: "pointer",
-                          fontWeight: 600,
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 5,
-                          transition: "all 0.15s ease",
-                        }}
-                      >
-                        <CheckCircle size={13} /> Aprovar Lead
-                      </button>
-                    )}
-                  </div>
+                  {/* 4. Aprovar Lead (Success / Green) */}
+                  <button
+                    type="button"
+                    disabled={updatingStatus || selectedLeadModal.status === "approved"}
+                    onClick={() => handleApproveLeads([selectedLeadModal.id])}
+                    style={{
+                      padding: "8px 4px",
+                      fontSize: 12,
+                      borderRadius: 6,
+                      border: "1px solid #0DB87E",
+                      background: selectedLeadModal.status === "approved" ? "rgba(13,184,126,0.2)" : "#0DB87E",
+                      color: selectedLeadModal.status === "approved" ? "#0DB87E" : "#FFFFFF",
+                      cursor: selectedLeadModal.status === "approved" ? "default" : "pointer",
+                      fontWeight: 600,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 4,
+                      opacity: selectedLeadModal.status === "approved" ? 0.7 : 1,
+                      transition: "all 0.15s ease",
+                      width: "100%",
+                    }}
+                  >
+                    <CheckCircle size={13} /> {selectedLeadModal.status === "approved" ? "Aprovado" : "Aprovar Lead"}
+                  </button>
                 </div>
-
-                <GhostButton onClick={() => setSelectedLeadModal(null)}>Fechar</GhostButton>
               </div>
 
               {/* LGPD Consentimento - Reposicionado no final do card (após os botões de status) */}
@@ -968,6 +979,11 @@ export default function AdminWaitlistPage() {
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
+
+              {/* Modal Footer (Fechar) */}
+              <div style={{ borderTop: "1px solid var(--admin-border)", marginTop: 8, paddingTop: 14, display: "flex", justifyContent: "flex-end" }}>
+                <GhostButton onClick={() => setSelectedLeadModal(null)}>Fechar</GhostButton>
+              </div>
             </div>
           </Card>
         </div>
