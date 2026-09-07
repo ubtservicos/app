@@ -81,6 +81,7 @@ import AdminDiaristasPage from "./pages/admin/AdminDiaristasPage.tsx";
 import AdminSorteioTrabPage from "./pages/admin/AdminSorteioTrabPage.tsx";
 import AdminSorteioConsPage from "./pages/admin/AdminSorteioConsPage.tsx";
 import AdminPaymentsPage from "./pages/admin/AdminPaymentsPage.tsx";
+import AdminPaymentDetailPage from "./pages/admin/AdminPaymentDetailPage.tsx";
 import AdminPayoutsPage from "./pages/admin/AdminPayoutsPage.tsx";
 import AdminDisputesPage from "./pages/admin/AdminDisputesPage.tsx";
 import AdminRefundsPage from "./pages/admin/AdminRefundsPage.tsx";
@@ -202,6 +203,7 @@ const App = () => (
               <Route path="/admin/kyc-pendentes" element={adminGuard(<AdminKycListPage />, ["operator", "admin", "super_admin"])} />
               <Route path="/admin/financeiro" element={adminGuard(<AdminFinanceiroPage />, ["financeiro", "admin", "super_admin"])} />
               <Route path="/admin/payments" element={adminGuard(<AdminPaymentsPage />, ["financeiro", "admin", "super_admin"])} />
+              <Route path="/admin/payments/:id" element={adminGuard(<AdminPaymentDetailPage />, ["financeiro", "admin", "super_admin"])} />
               <Route path="/admin/payouts" element={adminGuard(<AdminPayoutsPage />, ["financeiro", "admin", "super_admin"])} />
               <Route path="/admin/disputes" element={adminGuard(<AdminDisputesPage />, ["moderador", "admin", "super_admin"])} />
               <Route path="/admin/refunds" element={adminGuard(<AdminRefundsPage />, ["financeiro", "admin", "super_admin"])} />
