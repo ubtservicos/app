@@ -160,13 +160,49 @@ const PrestadorMototaxiOnboarding = () => {
     });
   }, []);
 
+  const uploadDoc = async (file: File, docType: string, userId: string): Promise<string | null> => {
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const filePath = `mototaxi/${userId}/${docType}_${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("kyc-documents")
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) {
+        console.error(`Erro ao subir ${docType}:`, uploadError);
+        return null;
+      }
+
+      const { data } = supabase.storage.from("kyc-documents").getPublicUrl(filePath);
+      return data?.publicUrl || null;
+    } catch (e) {
+      console.error(`Exceção upload ${docType}:`, e);
+      return null;
+    }
+  };
+
   const submit = async () => {
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user) {
-        // 1. Update Auth metadata
+        // 1. Upload files to Storage if present
+        const [
+          cnhFrenteUrl,
+          cnhVersoUrl,
+          selfieUrl,
+          crlvUrl,
+          motoPhotoUrl,
+        ] = await Promise.all([
+          cnhFront ? uploadDoc(cnhFront, "cnh_frente", user.id) : Promise.resolve(null),
+          cnhBack ? uploadDoc(cnhBack, "cnh_verso", user.id) : Promise.resolve(null),
+          selfie ? uploadDoc(selfie, "selfie", user.id) : Promise.resolve(null),
+          crlvFile ? uploadDoc(crlvFile, "crlv", user.id) : Promise.resolve(null),
+          motoFile ? uploadDoc(motoFile, "foto_moto", user.id) : Promise.resolve(null),
+        ]);
+
+        // 2. Update Auth metadata
         await supabase.auth.updateUser({
           data: {
             cpf: cpf,
@@ -183,7 +219,7 @@ const PrestadorMototaxiOnboarding = () => {
           }
         });
 
-        // 2. Persist to prestador_mototaxi table
+        // 3. Persist to prestador_mototaxi table with storage URLs
         const genderMapped = sex === "F" ? "feminino" : "masculino";
         await supabase.from("prestador_mototaxi").upsert({
           user_id: user.id,
@@ -193,10 +229,16 @@ const PrestadorMototaxiOnboarding = () => {
           modalidade: modalidade,
           kyc_status: "pending",
           is_online: false,
+          cnh_frente_url: cnhFrenteUrl,
+          cnh_verso_url: cnhVersoUrl,
+          cnh_photo_url: cnhFrenteUrl,
+          crlv_url: crlvUrl,
+          moto_photo_url: motoPhotoUrl,
+          selfie_url: selfieUrl,
           updated_at: new Date().toISOString()
         }, { onConflict: "user_id" });
 
-        // 3. Mark under_review in usuarios
+        // 4. Mark under_review in usuarios
         await supabase.from("usuarios").update({
           under_review: true
         }).eq("id", user.id);

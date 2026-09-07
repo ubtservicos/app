@@ -123,6 +123,7 @@ const PrestadorHome = () => {
 
   // Check configurations
   const hasMototaxi = user.kycStatus === "approved";
+  const isMototaxiPending = user.kycStatus === "pending";
   const hasAmbulante = (() => { try { return localStorage.getItem(`amb_session_${user.uid}`) === "1"; } catch { return false; } })();
   const hasDiarista = (() => { try { return localStorage.getItem(`diarista_perfil_${user.uid}`) === "1"; } catch { return false; } })();
   const hasCoco = user.role === "cocoecia" || user.role === "cocoecia-colaborador" || user.role === "cocoecia-dirigentes" || (() => { try { return !!localStorage.getItem("caminhaoId"); } catch { return false; } })();
@@ -566,10 +567,30 @@ const PrestadorHome = () => {
         </h2>
         <div className="flex flex-col gap-3">
           {!hasMototaxi && (
-            <button type="button" onClick={() => handleServiceNavigate("/app/prestador/mototaxi/onboarding")} className="flex items-center w-full bg-transparent border-2 border-dashed rounded-[20px] p-4 text-left" style={{ borderColor: theme.border }}>
-              <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: theme.bg }}><Bike size={20} color={theme.muted} /></div>
-              <div className="ml-3 flex-1"><h3 className="font-display text-[15px] font-bold" style={{ color: theme.text }}>Mototaxi</h3><p className="font-sans text-[12px]" style={{ color: theme.muted }}>Configurar serviço</p></div>
-              <ChevronRight size={18} color={theme.border} />
+            <button
+              type="button"
+              onClick={() => handleServiceNavigate(isMototaxiPending ? "/app/prestador/mototaxi/kyc-pending" : "/app/prestador/mototaxi/onboarding")}
+              className="flex items-center w-full bg-transparent border-2 border-dashed rounded-[20px] p-4 text-left transition-colors"
+              style={{ borderColor: isMototaxiPending ? "rgba(245,166,35,0.4)" : theme.border }}
+            >
+              <div
+                className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0"
+                style={{ background: isMototaxiPending ? "rgba(245,166,35,0.12)" : theme.bg }}
+              >
+                <Bike size={20} color={isMototaxiPending ? "#F5A623" : theme.muted} />
+              </div>
+              <div className="ml-3 flex-1">
+                <h3 className="font-display text-[15px] font-bold" style={{ color: theme.text }}>Mototaxi</h3>
+                {isMototaxiPending ? (
+                  <p className="font-sans text-[12px] font-medium flex items-center gap-1.5" style={{ color: "#F5A623" }}>
+                    <span>Em análise</span>
+                    <span style={{ fontSize: 10 }}>⏳</span>
+                  </p>
+                ) : (
+                  <p className="font-sans text-[12px]" style={{ color: theme.muted }}>Configurar serviço</p>
+                )}
+              </div>
+              <ChevronRight size={18} color={isMototaxiPending ? "#F5A623" : theme.border} />
             </button>
           )}
           {!hasAmbulante && (

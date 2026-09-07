@@ -20,8 +20,8 @@ import { supabase } from "@/lib/supabase";
 interface KycDocument {
   name: string;
   type: string;
-  status: "valid" | "pending";
-  previewUrl?: string;
+  status: "valid" | "pending" | "missing";
+  previewUrl?: string | null;
   description: string;
 }
 
@@ -33,6 +33,7 @@ export default function AdminKycDetailPage() {
   const [dbUser, setDbUser] = useState<any | null>(null);
   const [diarista, setDiarista] = useState<any | null>(null);
   const [caminhao, setCaminhao] = useState<any | null>(null);
+  const [mototaxi, setMototaxi] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"docs" | "checklist">("docs");
 
@@ -73,9 +74,17 @@ export default function AdminKycDetailPage() {
         .eq("prestador_id", id)
         .maybeSingle();
 
+      // Buscar mototaxi
+      const { data: motoData } = await supabase
+        .from("prestador_mototaxi")
+        .select("*")
+        .eq("user_id", id)
+        .maybeSingle();
+
       setDbUser(userData);
       setDiarista(diaristaData);
       setCaminhao(caminhaoData);
+      setMototaxi(motoData);
 
     } catch (err) {
       console.error("Erro ao carregar KYC do usuário:", err);
@@ -97,7 +106,7 @@ export default function AdminKycDetailPage() {
     const isColab = dbUser.role === "cocoecia-colaborador" || dbUser.role === "cocoecia-dirigentes" || dbUser.role === "cocoecia";
     if (isColab || caminhaoPlate) return "Reciclagem";
     if (diarista) return "Diarista";
-    if (dbUser.role === "prestador") return "Mototaxi";
+    if (mototaxi || dbUser.role === "prestador" || dbUser.under_review) return "Mototaxi";
     return "Geral";
   })();
 
@@ -133,6 +142,52 @@ export default function AdminKycDetailPage() {
 
   // Define docs based on category
   const documents = (() => {
+    if (category === "Mototaxi") {
+      const cnhFrente = mototaxi?.cnh_frente_url || mototaxi?.cnh_photo_url || null;
+      const cnhVerso = mototaxi?.cnh_verso_url || null;
+      const crlv = mototaxi?.crlv_url || null;
+      const fotoMoto = mototaxi?.moto_photo_url || null;
+      const selfie = mototaxi?.selfie_url || null;
+
+      return [
+        {
+          name: "CNH (Frente)",
+          type: "Documento Oficial",
+          status: cnhFrente ? "valid" : "missing",
+          previewUrl: cnhFrente,
+          description: "Frente da Carteira Nacional de Habilitação.",
+        },
+        {
+          name: "CNH (Verso)",
+          type: "Documento Oficial",
+          status: cnhVerso ? "valid" : "missing",
+          previewUrl: cnhVerso,
+          description: "Verso da CNH com QR Code e informações adicionais.",
+        },
+        {
+          name: "CRLV - Documento da Moto",
+          type: "Documento do Veículo",
+          status: crlv ? "valid" : "missing",
+          previewUrl: crlv,
+          description: "Certificado de Registro e Licenciamento do Veículo.",
+        },
+        {
+          name: "Foto da Motocicleta",
+          type: "Veículo",
+          status: fotoMoto ? "valid" : "missing",
+          previewUrl: fotoMoto,
+          description: "Foto nítida da motocicleta com placa visível.",
+        },
+        {
+          name: "Selfie com Documento",
+          type: "Validação Facial",
+          status: selfie ? "valid" : "missing",
+          previewUrl: selfie,
+          description: "Foto do condutor segurando o documento de identificação.",
+        },
+      ];
+    }
+
     const defaultDocs: KycDocument[] = [
       {
         name: "Documento de Identidade (Frente e Verso)",
@@ -147,24 +202,6 @@ export default function AdminKycDetailPage() {
         description: "Conta de água, luz ou telefone recente.",
       },
     ];
-
-    if (category === "Mototaxi") {
-      return [
-        ...defaultDocs,
-        {
-          name: "CRLV - Certificado de Registro do Veículo",
-          type: "Documento do Veículo",
-          status: "valid",
-          description: "Licenciamento anual da moto cadastrada.",
-        },
-        {
-          name: "Prontuário de Pontos CNH",
-          type: "Histórico DETRAN",
-          status: "valid",
-          description: "Histórico de pontuação do motorista.",
-        },
-      ];
-    }
 
     if (category === "Reciclagem") {
       return [
@@ -433,12 +470,23 @@ export default function AdminKycDetailPage() {
               >
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                    <div style={{ width: 40, height: 40, borderRadius: 8, background: "var(--admin-bg)", display: "flex", alignItems: "center", justifyCenter: "center", justifyContent: "center" }}>
-                      <FileText size={20} color="var(--admin-subtle)" />
+                    <div style={{ width: 40, height: 40, borderRadius: 8, background: "var(--admin-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <FileText size={20} color={doc.status === "missing" ? "var(--admin-muted)" : "var(--admin-subtle)"} />
                     </div>
-                    <span style={{ fontSize: 11, fontFamily: "DM Sans", color: "var(--admin-muted)", fontWeight: 600, textTransform: "uppercase" }}>
-                      {doc.type}
-                    </span>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      {doc.status === "missing" ? (
+                        <Pill bg="rgba(232,64,64,0.10)" color="#E84040" size="sm">
+                          Documento ausente
+                        </Pill>
+                      ) : (
+                        <Pill bg="rgba(13,184,126,0.10)" color="#0DB87E" size="sm">
+                          Enviado
+                        </Pill>
+                      )}
+                      <span style={{ fontSize: 11, fontFamily: "DM Sans", color: "var(--admin-muted)", fontWeight: 600, textTransform: "uppercase" }}>
+                        {doc.type}
+                      </span>
+                    </div>
                   </div>
                   <h3 style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "var(--admin-text)", margin: "0 0 4px" }}>
                     {doc.name}
@@ -448,8 +496,9 @@ export default function AdminKycDetailPage() {
                   </p>
                 </div>
 
-                <div style={{ display: "flex", gap: 10, marginTop: 16, borderTop: "1px solid var(--admin-bg)", paddingTop: 12 }}>
+                <div style={{ display: "flex", gap: 10, marginTop: 16, borderTop: "1px solid var(--admin-border)", paddingTop: 12 }}>
                   <button
+                    disabled={doc.status === "missing"}
                     onClick={() => setPreviewDoc(doc)}
                     style={{
                       flex: 1,
@@ -460,34 +509,39 @@ export default function AdminKycDetailPage() {
                       fontFamily: "DM Sans",
                       fontSize: 12,
                       fontWeight: 600,
-                      color: "var(--admin-subtle)",
-                      cursor: "pointer",
+                      color: doc.status === "missing" ? "var(--admin-muted)" : "var(--admin-subtle)",
+                      cursor: doc.status === "missing" ? "not-allowed" : "pointer",
+                      opacity: doc.status === "missing" ? 0.5 : 1,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       gap: 6,
                     }}
                   >
-                    <ImageIcon size={14} /> Visualizar
+                    <ImageIcon size={14} /> {doc.status === "missing" ? "Não enviado" : "Visualizar"}
                   </button>
-                  <a
-                    href="#"
-                    onClick={(e) => { e.preventDefault(); toast.show("Download iniciado."); }}
-                    style={{
-                      width: 32,
-                      height: 32,
-                      background: "var(--admin-bg)",
-                      border: "1px solid var(--admin-border)",
-                      borderRadius: 6,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "var(--admin-subtle)",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <Download size={14} />
-                  </a>
+                  {doc.previewUrl ? (
+                    <a
+                      href={doc.previewUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        width: 32,
+                        height: 32,
+                        background: "var(--admin-bg)",
+                        border: "1px solid var(--admin-border)",
+                        borderRadius: 6,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "var(--admin-subtle)",
+                        cursor: "pointer",
+                      }}
+                      title="Abrir arquivo original"
+                    >
+                      <Download size={14} />
+                    </a>
+                  ) : null}
                 </div>
               </Card>
             ))}
@@ -646,48 +700,62 @@ export default function AdminKycDetailPage() {
               </button>
             </div>
             
-            {/* Simulated Document Preview Image */}
+            {/* Document Preview Image */}
             <div style={{
               width: "100%",
-              height: 300,
+              minHeight: 280,
+              maxHeight: 480,
               background: "var(--admin-bg)",
-              border: "2px dashed #E2E8F0",
+              border: "1px solid var(--admin-border)",
               borderRadius: 12,
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
               gap: 12,
-              padding: 20,
-              position: "relative"
+              padding: 16,
+              position: "relative",
+              overflow: "hidden"
             }}>
-              <FileCheck size={48} color="#0DB87E" />
-              <div style={{ textAlign: "center" }}>
-                <div style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "var(--admin-text)" }}>
-                  {previewDoc.name}
-                </div>
-                <div style={{ fontFamily: "monospace", fontSize: 11, color: "var(--admin-muted)", marginTop: 4 }}>
-                  Hash de Segurança: SHA-256 (UBT-{Math.random().toString(36).substr(2, 9).toUpperCase()})
-                </div>
-              </div>
+              {previewDoc.previewUrl ? (
+                <img
+                  src={previewDoc.previewUrl}
+                  alt={previewDoc.name}
+                  style={{
+                    maxWidth: "100%",
+                    maxHeight: "360px",
+                    objectFit: "contain",
+                    borderRadius: 8,
+                  }}
+                />
+              ) : (
+                <>
+                  <FileCheck size={48} color="#0DB87E" />
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontFamily: "DM Sans", fontSize: 14, fontWeight: 600, color: "var(--admin-text)" }}>
+                      {previewDoc.name}
+                    </div>
+                    <div style={{ fontFamily: "monospace", fontSize: 11, color: "var(--admin-muted)", marginTop: 4 }}>
+                      Processamento e Validação Criptografada UBT
+                    </div>
+                  </div>
+                </>
+              )}
 
-              {/* Fake Document visual styling */}
               <div style={{
-                position: "absolute",
-                bottom: 12,
-                left: 12,
-                right: 12,
+                width: "100%",
                 background: "rgba(13, 184, 126, 0.05)",
                 border: "1px solid rgba(13, 184, 126, 0.15)",
                 padding: "8px 12px",
                 borderRadius: 8,
                 display: "flex",
                 alignItems: "center",
-                gap: 8
+                gap: 8,
+                marginTop: 8
               }}>
                 <ShieldCheck size={16} color="#0DB87E" />
                 <span style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-subtle)" }}>
-                  Este documento foi processado e criptografado de forma segura pelo Superapp.
+                  Este documento foi transmitido e armazenado de forma segura no Supabase Storage.
                 </span>
               </div>
             </div>
