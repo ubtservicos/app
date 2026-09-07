@@ -9,6 +9,7 @@
 import { describe, it, expect } from "vitest";
 import {
   calculateSplitAmounts,
+  buildNominal7WayLedger,
   validateSplitConfig,
   REGULATORY_DEFAULTS,
   type SplitConfig,
@@ -200,4 +201,75 @@ describe("UBT Finance — Split Engine (Pure Unit Tests)", () => {
       expect(result.valid).toBe(false);
     });
   });
+
+  // ---- A7: UBT Standard R$ 10.00 Sandbox Ride Test ----
+  describe("A7 · calculateSplitAmounts() on R$ 10.00 Ride (UBT Test Spec)", () => {
+    const split = calculateSplitAmounts(10.00);
+
+    it("distributes R$ 9.00 to Prestador (90%)", () => {
+      expect(split.prestador_amount).toBe(9.00);
+    });
+
+    it("distributes R$ 0.75 to UBT Platform (7.5%)", () => {
+      expect(split.ubt_amount).toBe(0.75);
+    });
+
+    it("distributes R$ 0.05 to Padrinho Prestador (0.5%)", () => {
+      expect(split.padrinho_prestador_amount).toBe(0.05);
+    });
+
+    it("distributes R$ 0.05 to Padrinho Tomador (0.5%)", () => {
+      expect(split.padrinho_tomador_amount).toBe(0.05);
+    });
+
+    it("distributes R$ 0.05 to Associação / Fundo Social (0.5%)", () => {
+      expect(split.comunidade_amount).toBe(0.05);
+    });
+
+    it("distributes R$ 0.05 to Prêmio Trabalhador (0.5%)", () => {
+      expect(split.premio_trabalhador).toBe(0.05);
+    });
+
+    it("distributes R$ 0.05 to Prêmio Consumidor (0.5%)", () => {
+      expect(split.premio_consumidor).toBe(0.05);
+    });
+
+    it("application_fee equals exactly R$ 1.00 (10%)", () => {
+      expect(split.application_fee).toBe(1.00);
+    });
+
+    it("sums exactly to R$ 10.00 with zero drift", () => {
+      const sum =
+        split.prestador_amount +
+        split.ubt_amount +
+        split.padrinho_prestador_amount +
+        split.padrinho_tomador_amount +
+        split.comunidade_amount +
+        split.premio_trabalhador +
+        split.premio_consumidor;
+      expect(sum).toBeCloseTo(10.00, 2);
+    });
+  });
+
+  // ---- A8: buildNominal7WayLedger verification ----
+  describe("A8 · buildNominal7WayLedger() nominal ledger resolution", () => {
+    it("generates 7 structured nominal entries for Felipe -> Silvina transaction", () => {
+      const ledger = buildNominal7WayLedger({
+        totalAmount: 10.00,
+        providerName: "Silvina Luz",
+        providerId: "0a5edf64-7585-401f-b310-126529607da0",
+      });
+
+      expect(ledger.entries).toHaveLength(7);
+      expect(ledger.total_amount).toBe(10.00);
+      expect(ledger.entries[0].amount).toBe(9.00);
+      expect(ledger.entries[0].name).toContain("Silvina Luz");
+      expect(ledger.entries[1].amount).toBe(0.75);
+      expect(ledger.entries[4].name).toContain("caixinha-mototaxista-sem-associação");
+      expect(ledger.entries[5].wallet_identifier).toBe("premio-trabalhador-2026");
+      expect(ledger.entries[6].wallet_identifier).toBe("premio-consumidor-2026");
+      expect(ledger.formatted_summary).toContain("SOMA TOTAL DAS 7 VIAS:                              R$  10.00 (100.0%)");
+    });
+  });
 });
+

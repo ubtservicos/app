@@ -375,6 +375,10 @@ serve(async (req: Request): Promise<Response> => {
         external_reference,
         entity_id,
         godparent_id,
+        godparent_tomador_id,
+        godparent_prestador_id,
+        provider_id,
+        provider_name,
         metadata,
         payment_method_id = "pix",
         token: cardToken,
@@ -420,6 +424,43 @@ serve(async (req: Request): Promise<Response> => {
       // --- [2] Calculate split amounts ---
       const split = calculateSplitAmounts(transaction_amount, splitConfig);
 
+      // --- [2.1] Resolve 7 nominal destinations ---
+      const resolvedProviderId = provider_id || "0a5edf64-7585-401f-b310-126529607da0"; // Silvina Luz
+      const resolvedProviderName = provider_name || "Silvina Luz (Mototaxista)";
+      const resolvedAssocName = entity_id ? `Associação (${entity_id})` : "caixinha-mototaxista-sem-associação";
+      const resolvedGodparentPrestador = godparent_prestador_id || "ubt-fundo-reserva-prestador";
+      const resolvedGodparentTomador = godparent_tomador_id || godparent_id || "ubt-fundo-reserva-tomador";
+
+      const nominalLedger = [
+        { dest: 1, name: `Prestador (${resolvedProviderName})`, id: resolvedProviderId, pct: splitConfig.prestador_pct, amount: split.prestador_amount },
+        { dest: 2, name: "Plataforma UBT (Taxa da Casa)", id: "ubt-platform-treasury", pct: splitConfig.ubt_pct, amount: split.ubt_amount },
+        { dest: 3, name: `Padrinho Prestador (${resolvedGodparentPrestador})`, id: resolvedGodparentPrestador, pct: splitConfig.padrinho_prestador_pct, amount: split.padrinho_prestador_amount },
+        { dest: 4, name: `Padrinho Tomador (${resolvedGodparentTomador})`, id: resolvedGodparentTomador, pct: splitConfig.padrinho_tomador_pct, amount: split.padrinho_tomador_amount },
+        { dest: 5, name: `Associação Mototaxi (${resolvedAssocName})`, id: entity_id || "caixinha-mototaxista-sem-associação", pct: splitConfig.comunidade_pct, amount: split.comunidade_amount },
+        { dest: 6, name: "Fundo Prêmio-Trabalhador (premio-trabalhador-2026)", id: "premio-trabalhador-2026", pct: splitConfig.premio_trabalhador_pct, amount: split.premio_trabalhador },
+        { dest: 7, name: "Fundo Prêmio-Consumidor (premio-consumidor-2026)", id: "premio-consumidor-2026", pct: splitConfig.premio_consumidor_pct, amount: split.premio_consumidor },
+      ];
+
+      const sumNominal = nominalLedger.reduce((acc, curr) => acc + curr.amount, 0);
+
+      const nominalLogString = `
+========================================================================
+💰 EXTRATO NOMINAL DE REPASSE — MOTOR DE SPLIT UBT (7 VIAS)
+Total da Transação: R$ ${transaction_amount.toFixed(2)}
+------------------------------------------------------------------------
+1. Prestador (${resolvedProviderName}): R$ ${split.prestador_amount.toFixed(2)} (${splitConfig.prestador_pct.toFixed(1)}%)
+2. Plataforma UBT (Taxa da Casa): R$ ${split.ubt_amount.toFixed(2)} (${splitConfig.ubt_pct.toFixed(1)}%)
+3. Padrinho Prestador (${resolvedGodparentPrestador}): R$ ${split.padrinho_prestador_amount.toFixed(2)} (${splitConfig.padrinho_prestador_pct.toFixed(1)}%)
+4. Padrinho Tomador (${resolvedGodparentTomador}): R$ ${split.padrinho_tomador_amount.toFixed(2)} (${splitConfig.padrinho_tomador_pct.toFixed(1)}%)
+5. Associação (${resolvedAssocName}): R$ ${split.comunidade_amount.toFixed(2)} (${splitConfig.comunidade_pct.toFixed(1)}%)
+6. Prêmio Trabalhador (premio-trabalhador-2026): R$ ${split.premio_trabalhador.toFixed(2)} (${splitConfig.premio_trabalhador_pct.toFixed(1)}%)
+7. Prêmio Consumidor (premio-consumidor-2026): R$ ${split.premio_consumidor.toFixed(2)} (${splitConfig.premio_consumidor_pct.toFixed(1)}%)
+------------------------------------------------------------------------
+SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
+========================================================================`;
+
+      console.log(nominalLogString);
+
       // --- [3] Audit: split_calculated (BEFORE calling MP — guarantees traceability even on MP failure) ---
       await logAuditEvent({
         transactionType: "split_calculated",
@@ -431,11 +472,11 @@ serve(async (req: Request): Promise<Response> => {
           split_config_source:   splitFromDb ? "database" : "regulatory_defaults",
           split_config:          splitConfig,
           split_amounts:         split,
+          nominal_ledger:        nominalLedger,
+          sum_nominal:           sumNominal,
           calculated_at:         new Date().toISOString(),
         },
       });
-
-      console.log(`[payment-gateway] Split calculated for R$${transaction_amount}: prestador=R$${split.prestador_amount}, application_fee=R$${split.application_fee}`);
 
       // --- [MOCK PIX IN TEST ENV] ---
       const mpAccessToken = (Deno.env.get("ENVIRONMENT") === "production" ? Deno.env.get("MP_ACCESS_TOKEN") : Deno.env.get("MP_ACCESS_TOKEN_TEST")) || Deno.env.get("MP_ACCESS_TOKEN_TEST") || "";
@@ -505,8 +546,6 @@ serve(async (req: Request): Promise<Response> => {
       }
 
       // --- [7] Persist split record in pagamentos_split (idempotent upsert) ---
-      // Only persist if we have an external_reference to use as the transaction_id key.
-      // If omitted by the caller, we use the MP payment ID as fallback.
       const transactionId = external_reference ?? `mp_${mpData.id}`;
       const { persisted: splitPersisted, error: splitError } = await persistSplitRecord({
         transactionId,
@@ -514,7 +553,8 @@ serve(async (req: Request): Promise<Response> => {
         serviceId:   service_id,
         split,
         entityId:    entity_id ?? null,
-        godparentId: godparent_id ?? null,
+        godparentTomadorId:   godparent_tomador_id ?? godparent_id ?? null,
+        godparentPrestadorId: godparent_prestador_id ?? null,
       });
 
       if (!splitPersisted) {
@@ -537,6 +577,8 @@ serve(async (req: Request): Promise<Response> => {
             service_type,
             service_id,
             split_amounts:    split,
+            nominal_ledger:   nominalLedger,
+            sum_nominal:      sumNominal,
             split_config_source: splitFromDb ? "database" : "regulatory_defaults",
           },
         });
@@ -553,22 +595,25 @@ serve(async (req: Request): Promise<Response> => {
             payment_id:         mpData.id,
             status:             mpData.status,
             status_detail:      mpData.status_detail,
-            // external_reference ties the MP payment_id back to pagamentos_split.transaction_id
             external_reference: external_reference ?? null,
             ticket_url:         txData?.ticket_url    ?? null,
-            qr_code:            txData?.qr_code       ?? null, // "Copia e Cola"
+            qr_code:            txData?.qr_code       ?? null,
             qr_code_base64:     txData?.qr_code_base64 ?? null,
           },
           split: {
-            total_amount:        split.total_amount,
-            prestador_amount:    split.prestador_amount,
-            application_fee:     split.application_fee,
-            ubt_amount:          split.ubt_amount,
-            comunidade_amount:   split.comunidade_amount,
-            premio_trabalhador:  split.premio_trabalhador,
-            premio_consumidor:   split.premio_consumidor,
-            padrinho_amount:     split.padrinho_amount,
-            config_source:       splitFromDb ? "database" : "regulatory_defaults",
+            total_amount:              split.total_amount,
+            prestador_amount:          split.prestador_amount,
+            application_fee:           split.application_fee,
+            ubt_amount:                split.ubt_amount,
+            comunidade_amount:         split.comunidade_amount,
+            premio_trabalhador:        split.premio_trabalhador,
+            premio_consumidor:         split.premio_consumidor,
+            padrinho_tomador_amount:   split.padrinho_tomador_amount,
+            padrinho_prestador_amount: split.padrinho_prestador_amount,
+            padrinho_amount:           split.padrinho_amount,
+            config_source:             splitFromDb ? "database" : "regulatory_defaults",
+            nominal_ledger:            nominalLedger,
+            statement:                 nominalLogString,
           },
         }),
         { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }

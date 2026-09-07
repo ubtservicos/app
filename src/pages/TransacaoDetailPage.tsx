@@ -487,14 +487,10 @@ const TransacaoDetailPage = () => {
                 {SPLIT_META.map((m) => {
                   const pct =
                     m.key === "prestador"
-                      ? 90
+                      ? "90"
                       : m.key === "ubt"
-                        ? 4
-                        : m.key === "comunidade"
-                          ? 2
-                          : m.key === "padrinho"
-                            ? 1
-                            : 1.5;
+                        ? "7,5"
+                        : "0,5";
                   const val = splitDetail[m.key];
                   const IconC = SPLIT_ICON_MAP[m.icon];
                   return (

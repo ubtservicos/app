@@ -1,25 +1,48 @@
+import { calculateSplitAmounts } from "@/lib/finance/splitEngine";
+
 export const calcPrice = (distanceKm: number): number => {
   const BASE_FIXED = 4.0;
   const BASE_RATE = 2.5;
   return Math.round((BASE_FIXED + BASE_RATE * distanceKm) * 100) / 100;
 };
 
-export const calcSplit = (total: number) => ({
-  prestador: +(total * 0.9).toFixed(2),
-  ubt: +(total * 0.04).toFixed(2),
-  comunidade: +(total * 0.02).toFixed(2),
-  premioTrabalhador: +(total * 0.015).toFixed(2),
-  premioConsumidor: +(total * 0.015).toFixed(2),
-  padrinho: +(total * 0.01).toFixed(2),
-});
+export const calcSplit = (total: number) => {
+  if (total <= 0) {
+    return {
+      prestador: 0,
+      ubt: 0,
+      padrinhoPrestador: 0,
+      padrinhoTomador: 0,
+      associacao: 0,
+      premioTrabalhador: 0,
+      premioConsumidor: 0,
+      comunidade: 0,
+      padrinho: 0,
+    };
+  }
+  const split = calculateSplitAmounts(total);
+  return {
+    prestador: split.prestador_amount,
+    ubt: split.ubt_amount,
+    padrinhoPrestador: split.padrinho_prestador_amount,
+    padrinhoTomador: split.padrinho_tomador_amount,
+    associacao: split.comunidade_amount,
+    premioTrabalhador: split.premio_trabalhador,
+    premioConsumidor: split.premio_consumidor,
+    // Backwards compatibility aliases
+    comunidade: split.comunidade_amount,
+    padrinho: split.padrinho_amount || +(split.padrinho_prestador_amount + split.padrinho_tomador_amount).toFixed(2),
+  };
+};
 
 export type SplitKey =
   | "prestador"
   | "ubt"
-  | "comunidade"
+  | "padrinhoPrestador"
+  | "padrinhoTomador"
+  | "associacao"
   | "premioTrabalhador"
-  | "premioConsumidor"
-  | "padrinho";
+  | "premioConsumidor";
 
 export const SPLIT_META: Array<{
   key: SplitKey;
@@ -27,12 +50,13 @@ export const SPLIT_META: Array<{
   icon: "User" | "Building2" | "Users" | "Gift" | "Star" | "Heart";
   color: string;
 }> = [
-  { key: "prestador", label: "Prestador", icon: "User", color: "#0DB87E" },
-  { key: "ubt", label: "UBT", icon: "Building2", color: "#F5A623" },
-  { key: "comunidade", label: "Comunidade", icon: "Users", color: "#2B6EE8" },
-  { key: "premioTrabalhador", label: "Prêmio Trabalhador", icon: "Gift", color: "#9B59B6" },
-  { key: "premioConsumidor", label: "Prêmio Consumidor", icon: "Star", color: "#E84040" },
-  { key: "padrinho", label: "Padrinho/Madrinha", icon: "Heart", color: "#0DB87E" },
+  { key: "prestador", label: "Prestador (90%)", icon: "User", color: "#0DB87E" },
+  { key: "ubt", label: "UBT Plataforma (7,5%)", icon: "Building2", color: "#F5A623" },
+  { key: "padrinhoPrestador", label: "Padrinho Prestador (0,5%)", icon: "Heart", color: "#0DB87E" },
+  { key: "padrinhoTomador", label: "Padrinho Tomador (0,5%)", icon: "Heart", color: "#10B981" },
+  { key: "associacao", label: "Associação (0,5%)", icon: "Users", color: "#2B6EE8" },
+  { key: "premioTrabalhador", label: "Prêmio Trabalhador (0,5%)", icon: "Gift", color: "#9B59B6" },
+  { key: "premioConsumidor", label: "Prêmio Consumidor (0,5%)", icon: "Star", color: "#E84040" },
 ];
 
 export const formatBRL = (v: number) =>

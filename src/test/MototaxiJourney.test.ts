@@ -127,27 +127,29 @@ describe("Mototáxi Journey State Transitions & Financial Calculations", () => {
       expect(price).toBe(10.95);
     });
 
-    it("should calculate splits correctly based on total transaction amount", () => {
-      const total = 12.5;
+    it("should calculate splits correctly based on total transaction amount (7-way split)", () => {
+      const total = 10.0;
       const splits = calcSplit(total);
 
-      expect(splits.prestador).toBe(11.25); // 90%
-      expect(splits.ubt).toBe(0.50); // 4%
-      expect(splits.comunidade).toBe(0.25); // 2%
-      expect(splits.premioTrabalhador).toBe(0.19); // 1.5% rounded (0.1875)
-      expect(splits.premioConsumidor).toBe(0.19); // 1.5% rounded (0.1875)
-      expect(splits.padrinho).toBe(0.13); // 1% rounded (0.125)
+      expect(splits.prestador).toBe(9.00); // 90%
+      expect(splits.ubt).toBe(0.75); // 7.5%
+      expect(splits.padrinhoPrestador).toBe(0.05); // 0.5%
+      expect(splits.padrinhoTomador).toBe(0.05); // 0.5%
+      expect(splits.associacao).toBe(0.05); // 0.5%
+      expect(splits.premioTrabalhador).toBe(0.05); // 0.5%
+      expect(splits.premioConsumidor).toBe(0.05); // 0.5%
       
-      // Sum verification
+      // Sum verification: exactly 10.00
       const sum = +(
         splits.prestador +
         splits.ubt +
-        splits.comunidade +
+        splits.padrinhoPrestador +
+        splits.padrinhoTomador +
+        splits.associacao +
         splits.premioTrabalhador +
-        splits.premioConsumidor +
-        splits.padrinho
+        splits.premioConsumidor
       ).toFixed(2);
-      expect(sum).toBe(12.51); // Sum snaps within rounding error
+      expect(sum).toBe(10.00);
     });
   });
 

@@ -566,21 +566,27 @@ const CompletedScreen = ({
 
   const handleConfirmPayment = async () => {
     setIsLoading(true);
+    const finalAmount = price > 0 ? price : 10.00;
     try {
       const { data, error } = await supabase.functions.invoke('payment-gateway', {
         body: {
           action: "create_payment_intent",
           service_type: "mototaxi",
-          service_id: state.rideId || "",
-          transaction_amount: price,
-          payer_email: user.email || session?.user?.email || "",
-          payer_first_name: (user.name || "Cliente").split(" ")[0],
-          payer_last_name: (user.name || "UBT").split(" ").slice(1).join(" ") || "UBT",
-          description: "Corrida UBT",
+          service_id: state.rideId || "00000000-0000-0000-0000-000000000001",
+          transaction_amount: finalAmount,
+          provider_id: state.prestadorInfo?.id || "0a5edf64-7585-401f-b310-126529607da0",
+          provider_name: state.prestadorInfo?.name || "Silvina Luz",
+          payer_email: user.email || session?.user?.email || "felipe@exemplo.com",
+          payer_first_name: (user.name || "Felipe").split(" ")[0],
+          payer_last_name: (user.name || "Santander").split(" ").slice(1).join(" ") || "Santander",
+          description: `Corrida UBT Mototáxi - R$ ${finalAmount.toFixed(2)} (Sandbox Split 7 Vias)`,
           payment_method_id: method
         }
       });
       if (error) throw error;
+      if (data?.split?.statement) {
+        console.log("✅ [UBT Split Engine 7 Vias Extrato]:\n" + data.split.statement);
+      }
       if (data?.pix?.qr_code_base64) {
         setQrCodeBase64(data.pix.qr_code_base64);
       } else {

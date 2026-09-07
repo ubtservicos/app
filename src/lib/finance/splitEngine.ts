@@ -141,3 +141,137 @@ export function validateSplitConfig(config: SplitConfig): { valid: boolean; erro
 
   return { valid: true };
 }
+
+// ============================================================
+// NOMINAL 7-WAY LEDGER RESOLVER (UBT 7 Destinos)
+// ============================================================
+
+export interface NominalSplitEntry {
+  destination_index: number;
+  category: "prestador" | "ubt" | "padrinho_prestador" | "padrinho_tomador" | "associacao" | "premio_trabalhador" | "premio_consumidor";
+  name: string;
+  wallet_identifier: string;
+  percentage: number;
+  amount: number;
+}
+
+export interface Nominal7WayLedger {
+  total_amount: number;
+  entries: NominalSplitEntry[];
+  formatted_summary: string;
+}
+
+export function buildNominal7WayLedger({
+  totalAmount,
+  providerName = "Silvina (Prestadora)",
+  providerId = "0a5edf64-7585-401f-b310-126529607da0",
+  associationName,
+  associationId,
+  godparentPrestadorName,
+  godparentPrestadorId,
+  godparentTomadorName,
+  godparentTomadorId,
+  config = REGULATORY_DEFAULTS,
+}: {
+  totalAmount: number;
+  providerName?: string;
+  providerId?: string;
+  associationName?: string | null;
+  associationId?: string | null;
+  godparentPrestadorName?: string | null;
+  godparentPrestadorId?: string | null;
+  godparentTomadorName?: string | null;
+  godparentTomadorId?: string | null;
+  config?: SplitConfig;
+}): Nominal7WayLedger {
+  const split = calculateSplitAmounts(totalAmount, config);
+
+  const resolvedAssocName = associationName || "caixinha-mototaxista-sem-associação";
+  const resolvedAssocId = associationId || "caixinha-mototaxista-sem-associação";
+
+  const resolvedGodparentPrestadorName = godparentPrestadorName || (godparentPrestadorId ? `Padrinho (${godparentPrestadorId.substring(0, 8)})` : "ubt-fundo-reserva-prestador");
+  const resolvedGodparentPrestadorId = godparentPrestadorId || "ubt-fundo-reserva-prestador";
+
+  const resolvedGodparentTomadorName = godparentTomadorName || (godparentTomadorId ? `Padrinho (${godparentTomadorId.substring(0, 8)})` : "ubt-fundo-reserva-tomador");
+  const resolvedGodparentTomadorId = godparentTomadorId || "ubt-fundo-reserva-tomador";
+
+  const entries: NominalSplitEntry[] = [
+    {
+      destination_index: 1,
+      category: "prestador",
+      name: `Prestador (${providerName})`,
+      wallet_identifier: providerId,
+      percentage: config.prestador_pct,
+      amount: split.prestador_amount,
+    },
+    {
+      destination_index: 2,
+      category: "ubt",
+      name: "Plataforma UBT (Taxa da Casa)",
+      wallet_identifier: "ubt-platform-treasury",
+      percentage: config.ubt_pct,
+      amount: split.ubt_amount,
+    },
+    {
+      destination_index: 3,
+      category: "padrinho_prestador",
+      name: `Padrinho Prestador (${resolvedGodparentPrestadorName})`,
+      wallet_identifier: resolvedGodparentPrestadorId,
+      percentage: config.padrinho_prestador_pct,
+      amount: split.padrinho_prestador_amount,
+    },
+    {
+      destination_index: 4,
+      category: "padrinho_tomador",
+      name: `Padrinho Tomador (${resolvedGodparentTomadorName})`,
+      wallet_identifier: resolvedGodparentTomadorId,
+      percentage: config.padrinho_tomador_pct,
+      amount: split.padrinho_tomador_amount,
+    },
+    {
+      destination_index: 5,
+      category: "associacao",
+      name: `Associação / Fundo Social (${resolvedAssocName})`,
+      wallet_identifier: resolvedAssocId,
+      percentage: config.comunidade_pct,
+      amount: split.comunidade_amount,
+    },
+    {
+      destination_index: 6,
+      category: "premio_trabalhador",
+      name: "Fundo Prêmio-Trabalhador",
+      wallet_identifier: "premio-trabalhador-2026",
+      percentage: config.premio_trabalhador_pct,
+      amount: split.premio_trabalhador,
+    },
+    {
+      destination_index: 7,
+      category: "premio_consumidor",
+      name: "Fundo Prêmio-Consumidor",
+      wallet_identifier: "premio-consumidor-2026",
+      percentage: config.premio_consumidor_pct,
+      amount: split.premio_consumidor,
+    },
+  ];
+
+  const lines = [
+    `========================================================================`,
+    `💰 EXTRATO NOMINAL DE REPASSE — MOTOR DE SPLIT UBT (7 VIAS)`,
+    `Total da Corrida: R$ ${totalAmount.toFixed(2)}`,
+    `------------------------------------------------------------------------`,
+    ...entries.map(
+      (e) =>
+        `${e.destination_index}. ${e.name.padEnd(52, " ")} R$ ${e.amount.toFixed(2).padStart(6, " ")} (${e.percentage.toFixed(1)}%)`
+    ),
+    `------------------------------------------------------------------------`,
+    `SOMA TOTAL DAS 7 VIAS:                              R$ ${entries.reduce((a, b) => a + b.amount, 0).toFixed(2).padStart(6, " ")} (100.0%)`,
+    `========================================================================`,
+  ];
+
+  return {
+    total_amount: totalAmount,
+    entries,
+    formatted_summary: lines.join("\n"),
+  };
+}
+
