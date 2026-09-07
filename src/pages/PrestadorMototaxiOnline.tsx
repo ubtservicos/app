@@ -209,9 +209,13 @@ const PrestadorMototaxiOnline = () => {
     };
   }, []);
 
-  // Sincronizar sessão online no Supabase
+  const activeSessionIdRef = useRef<string | null>(null);
+
+  // Sincronizar sessão online no Supabase com lógica Select-First e Resiliência a Conflito (409)
   useEffect(() => {
     if (!user.uid || !myLocation) return;
+    let isCancelled = false;
+
     async function syncSession() {
       const isInside = isLocationInUbatuba(myLocation.lat, myLocation.lng);
       if (!isInside) {
@@ -219,17 +223,86 @@ const PrestadorMototaxiOnline = () => {
         goOffline();
         return;
       }
-      await supabase
-        .from('mototaxi_sessoes')
-        .upsert({
-          prestador_id: user.uid,
-          is_online: true,
-          lat: myLocation.lat,
-          lng: myLocation.lng,
-          updated_at: new Date().toISOString()
-        });
+
+      try {
+        let sessionId = activeSessionIdRef.current;
+
+        // 1. Select-First: Se ainda não temos o ID em memória, buscar sessão existente no banco
+        if (!sessionId) {
+          const { data: existingSession, error: selectErr } = await supabase
+            .from('mototaxi_sessoes')
+            .select('id, is_online')
+            .eq('prestador_id', user.uid)
+            .maybeSingle();
+
+          if (!selectErr && existingSession) {
+            sessionId = existingSession.id;
+            activeSessionIdRef.current = existingSession.id;
+          }
+        }
+
+        if (sessionId) {
+          // 2. Reaproveitamento de sessão fantasma/ativa: Apenas UPDATE
+          const { error: updateErr } = await supabase
+            .from('mototaxi_sessoes')
+            .update({
+              is_online: true,
+              lat: myLocation.lat,
+              lng: myLocation.lng,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', sessionId);
+
+          if (updateErr) throw updateErr;
+        } else {
+          // 3. Nenhuma sessão existente: Inserir nova sessão
+          const { data: inserted, error: insertErr } = await supabase
+            .from('mototaxi_sessoes')
+            .insert({
+              prestador_id: user.uid,
+              is_online: true,
+              lat: myLocation.lat,
+              lng: myLocation.lng,
+              updated_at: new Date().toISOString()
+            })
+            .select('id')
+            .single();
+
+          if (insertErr) {
+            // Tratamento inteligente de conflito (409 Duplicate Key / Unique Constraint)
+            console.warn("Conflito ao criar sessão de mototáxi (409). Recuperando sessão ativa...", insertErr);
+            const { data: recovered } = await supabase
+              .from('mototaxi_sessoes')
+              .select('id')
+              .eq('prestador_id', user.uid)
+              .maybeSingle();
+
+            if (recovered && !isCancelled) {
+              activeSessionIdRef.current = recovered.id;
+              await supabase
+                .from('mototaxi_sessoes')
+                .update({
+                  is_online: true,
+                  lat: myLocation.lat,
+                  lng: myLocation.lng,
+                  updated_at: new Date().toISOString()
+                })
+                .eq('id', recovered.id);
+            }
+          } else if (inserted && !isCancelled) {
+            activeSessionIdRef.current = inserted.id;
+          }
+        }
+      } catch (err) {
+        console.error("Erro na sincronização de sessão mototáxi:", err);
+      }
     }
+
     syncSession();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [user.uid, myLocation]);
 
   // Escutar chamados reais em tempo real
@@ -294,11 +367,12 @@ const PrestadorMototaxiOnline = () => {
     if (watchIdRef.current !== null && navigator.geolocation) {
       navigator.geolocation.clearWatch(watchIdRef.current);
     }
+    activeSessionIdRef.current = null;
     if (user.uid) {
       try {
         await supabase
           .from('mototaxi_sessoes')
-          .update({ is_online: false })
+          .update({ is_online: false, updated_at: new Date().toISOString() })
           .eq('prestador_id', user.uid);
       } catch (err) {
         console.error('Erro ao desativar sessão:', err);
