@@ -202,7 +202,7 @@ const PrestadorMototaxiOnboarding = () => {
           motoFile ? uploadDoc(motoFile, "foto_moto", user.id) : Promise.resolve(null),
         ]);
 
-        // 2. Update Auth metadata
+        // 2. Update Auth metadata (only basic profile fields)
         await supabase.auth.updateUser({
           data: {
             cpf: cpf,
@@ -210,12 +210,6 @@ const PrestadorMototaxiOnboarding = () => {
             placa_moto: plate,
             modelo_moto: brandModel,
             modalidade_moto: modalidade,
-            mototaxi_status: "kyc-pending",
-            has_crlv: !!crlvFile,
-            has_moto_photo: !!motoFile,
-            has_cnh_front: !!cnhFront,
-            has_cnh_back: !!cnhBack,
-            has_selfie: !!selfie,
           }
         });
 

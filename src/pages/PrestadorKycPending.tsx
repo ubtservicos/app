@@ -35,8 +35,12 @@ export default function PrestadorKycPending() {
         motoData?.kyc_status === "approved" ||
         (userData?.role === "prestador" && !userData?.under_review && userData?.status === "active");
 
-      if (isApproved) {
+      const hasNoPendingRecord = !motoData && !userData?.under_review;
+
+      if (isApproved || hasNoPendingRecord) {
         navigate("/app/prestador/home", { replace: true });
+      } else if (motoData?.kyc_status === "rejected") {
+        setStatusMessage("Cadastro não aprovado. Entre em contato com o suporte ou revise sua documentação.");
       } else {
         setStatusMessage("Cadastro ainda em fila de avaliação.");
       }

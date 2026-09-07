@@ -49,8 +49,11 @@ export default function AdminKycListPage() {
       if (dbUsers) {
         const mapped = dbUsers
           .filter((u: any) => {
-            // Must be pending either in prestador_mototaxi, under_review, or status pending
-            return motoPendingUserIds.has(u.id) || u.under_review === true || u.status === "pending";
+            // Must be pending either in prestador_mototaxi, or explicitly marked under_review for diarista/reciclagem
+            return (
+              motoPendingUserIds.has(u.id) ||
+              (u.under_review === true && (diaristasSet.has(u.id) || caminhoesSet.has(u.id)))
+            );
           })
           .map((u: any) => {
             const isColab = u.role === "cocoecia-colaborador" || u.role === "cocoecia-dirigentes" || u.role === "cocoecia";

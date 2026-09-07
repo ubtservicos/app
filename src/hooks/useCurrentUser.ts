@@ -49,18 +49,12 @@ export const useCurrentUser = (): RealUser => {
           }
         }
 
-        // Accurately resolve KYC status
+        // Accurately resolve KYC status strictly from the SSOT (prestador_mototaxi)
         let resolvedKycStatus: "approved" | "pending" | "none" | "rejected" = "none";
         if (mototaxiData?.kyc_status) {
           resolvedKycStatus = mototaxiData.kyc_status as any;
-        } else if (authUser.user_metadata?.mototaxi_status) {
-          resolvedKycStatus = authUser.user_metadata.mototaxi_status === "kyc-pending"
-            ? "pending"
-            : authUser.user_metadata.mototaxi_status;
-        } else if (dbUser?.under_review || dbUser?.status === "pending") {
-          resolvedKycStatus = "pending";
-        } else if (dbUser?.role === "prestador") {
-          resolvedKycStatus = "approved";
+        } else {
+          resolvedKycStatus = "none";
         }
 
         setUser({
@@ -69,10 +63,10 @@ export const useCurrentUser = (): RealUser => {
           email: authUser.email,
           role: authUser.email === "ubt.servicos@gmail.com" ? "admin" : ((dbUser?.role as RealUserRole) || "tomador"),
           kycStatus: resolvedKycStatus,
-          modalidade: mototaxiData?.modalidade || authUser.user_metadata?.modalidade_moto,
-          plate: mototaxiData?.plate || authUser.user_metadata?.placa_moto,
-          cpf: mototaxiData?.cpf || authUser.user_metadata?.cpf,
-          sexo: mototaxiData?.gender || authUser.user_metadata?.sexo,
+          modalidade: mototaxiData?.modalidade || null,
+          plate: mototaxiData?.plate || null,
+          cpf: mototaxiData?.cpf || authUser.user_metadata?.cpf || null,
+          sexo: mototaxiData?.gender || authUser.user_metadata?.sexo || null,
           status: userStatus,
           mototaxiActive: authUser.user_metadata?.mototaxi_active !== false,
           isLoading: false, // Carregamento concluído com sucesso
