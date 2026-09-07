@@ -133,6 +133,16 @@ export default function AdminWaitlistPage() {
 
       const approvedLeads = (data || []) as { id: string; nome: string; email: string; telefone: string; onboarding_url: string }[];
       
+      // Log generated onboarding URLs
+      approvedLeads.forEach(lead => {
+        console.log(`✅ Link de Onboarding Gerado: https://ubt-homologacao.vercel.app/onboarding?token=${lead.id}`);
+      });
+      if (approvedLeads.length === 0 && leadIds.length > 0) {
+        leadIds.forEach(id => {
+          console.log(`✅ Link de Onboarding Gerado: https://ubt-homologacao.vercel.app/onboarding?token=${id}`);
+        });
+      }
+      
       let successCount = 0;
       let commSuccessCount = 0;
       let commFailedCount = 0;
