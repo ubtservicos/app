@@ -15,7 +15,9 @@ import {
   Smartphone,
   Globe,
   ShieldCheck,
-  XCircle
+  XCircle,
+  Copy,
+  Check
 } from "lucide-react";
 import { Card, PageTitle, Pill, GhostButton } from "@/components/admin/ui";
 import {
@@ -103,6 +105,19 @@ export default function AdminWaitlistPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedLeadModal, setSelectedLeadModal] = useState<WaitlistItem | null>(null);
   const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [copiedLink, setCopiedLink] = useState<string | null>(null);
+
+  const handleCopyLink = async (text: string, type: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedLink(type);
+      toast.show("Link copiado para a área de transferência! ✓");
+      setTimeout(() => setCopiedLink(null), 2500);
+    } catch (err) {
+      console.error("Erro ao copiar link:", err);
+      toast.show("Erro ao copiar link.");
+    }
+  };
 
   // Close modal on Escape key press
   useEffect(() => {
@@ -945,6 +960,125 @@ export default function AdminWaitlistPage() {
                   >
                     <CheckCircle size={13} /> {selectedLeadModal.status === "approved" ? "Aprovado" : "Aprovar Lead"}
                   </button>
+                </div>
+              </div>
+
+              {/* Links de Acesso e Indicação */}
+              <div style={{ borderTop: "1px solid var(--admin-border)", paddingTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 700, letterSpacing: 0.5 }}>
+                  Links de Acesso e Indicação
+                </div>
+                
+                {/* Link de Onboarding */}
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--admin-subtle)", marginBottom: 4, fontWeight: 600 }}>
+                    Link de Onboarding:
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <input
+                      readOnly
+                      type="text"
+                      value={`https://ubt-homologacao.vercel.app/onboarding?token=${selectedLeadModal.id}`}
+                      style={{
+                        flex: 1,
+                        background: "var(--admin-bg)",
+                        border: "1px solid var(--admin-border)",
+                        borderRadius: 6,
+                        padding: "6px 10px",
+                        fontSize: 12,
+                        fontFamily: "monospace",
+                        color: "var(--admin-text)",
+                        outline: "none",
+                        cursor: "text",
+                      }}
+                      onClick={(e) => (e.target as HTMLInputElement).select()}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleCopyLink(`https://ubt-homologacao.vercel.app/onboarding?token=${selectedLeadModal.id}`, "onboarding")}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "6px 10px",
+                        borderRadius: 6,
+                        border: "1px solid var(--admin-border)",
+                        background: copiedLink === "onboarding" ? "rgba(13,184,126,0.15)" : "var(--admin-surface)",
+                        color: copiedLink === "onboarding" ? "#0DB87E" : "var(--admin-text)",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      {copiedLink === "onboarding" ? (
+                        <>
+                          <Check size={13} color="#0DB87E" /> Copiado
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={13} /> Copiar
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Link Padrinho/Madrinha */}
+                <div>
+                  <div style={{ fontSize: 11, color: "var(--admin-subtle)", marginBottom: 4, fontWeight: 600 }}>
+                    Link Padrinho/Madrinha:
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <input
+                      readOnly
+                      type="text"
+                      value={`https://ubt-homologacao.vercel.app/cadastro?ref=${selectedLeadModal.id}`}
+                      style={{
+                        flex: 1,
+                        background: "var(--admin-bg)",
+                        border: "1px solid var(--admin-border)",
+                        borderRadius: 6,
+                        padding: "6px 10px",
+                        fontSize: 12,
+                        fontFamily: "monospace",
+                        color: "var(--admin-text)",
+                        outline: "none",
+                        cursor: "text",
+                      }}
+                      onClick={(e) => (e.target as HTMLInputElement).select()}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleCopyLink(`https://ubt-homologacao.vercel.app/cadastro?ref=${selectedLeadModal.id}`, "padrinho")}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "6px 10px",
+                        borderRadius: 6,
+                        border: "1px solid var(--admin-border)",
+                        background: copiedLink === "padrinho" ? "rgba(13,184,126,0.15)" : "var(--admin-surface)",
+                        color: copiedLink === "padrinho" ? "#0DB87E" : "var(--admin-text)",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      {copiedLink === "padrinho" ? (
+                        <>
+                          <Check size={13} color="#0DB87E" /> Copiado
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={13} /> Copiar
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
 
