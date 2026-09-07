@@ -15,11 +15,16 @@ const PrestadorHome = () => {
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    const onboarded = localStorage.getItem("ubt_onboarded_prestador");
-    if (!onboarded) {
+    const isTourCompleted =
+      localStorage.getItem("ubt_onboarded_prestador") === "true" ||
+      localStorage.getItem("ubt_tour_completed_prestador") === "true" ||
+      localStorage.getItem("tour_completed") === "true" ||
+      (user.uid ? localStorage.getItem(`ubt_tour_completed_${user.uid}`) === "true" : false);
+
+    if (!isTourCompleted && !user.isLoading) {
       setShowOnboarding(true);
     }
-  }, []);
+  }, [user.uid, user.isLoading]);
 
   // Load status rules and find rule for current user status
   const rules = getStatusRules();
@@ -603,6 +608,11 @@ const PrestadorHome = () => {
           role="prestador"
           onClose={() => {
             localStorage.setItem("ubt_onboarded_prestador", "true");
+            localStorage.setItem("ubt_tour_completed_prestador", "true");
+            localStorage.setItem("tour_completed", "true");
+            if (user.uid) {
+              localStorage.setItem(`ubt_tour_completed_${user.uid}`, "true");
+            }
             setShowOnboarding(false);
           }}
         />

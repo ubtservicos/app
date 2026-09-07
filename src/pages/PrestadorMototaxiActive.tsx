@@ -27,6 +27,7 @@ interface ActiveRide {
   distanceKm: number;
   durationMin: number;
   price: number;
+  passengerName?: string;
   originCoords?: { lat: number; lng: number };
   destinationCoords?: { lat: number; lng: number };
 }
@@ -328,20 +329,33 @@ const PrestadorMototaxiActive = () => {
               </div>
             </div>
 
-            <div
-              className="mt-3 rounded-xl flex items-center gap-3"
-              style={{ background: "var(--prestador-bg)", padding: 12, border: "1px solid var(--prestador-border)" }}
-            >
-              <div
-                className="w-10 h-10 rounded-full flex items-center justify-center animate-pulse"
-                style={{ background: "rgba(13,184,126,0.15)", color: "#0DB87E" }}
-              >
-                <span className="font-display font-bold text-[14px]">MS</span>
-              </div>
-              <p className="font-sans text-[14px] font-semibold text-white">
-                Maria Silva
-              </p>
-            </div>
+            {(() => {
+              const pName = ride.passengerName || "Passageiro(a)";
+              const pInitials = pName
+                .split(" ")
+                .filter(Boolean)
+                .map((p) => p[0])
+                .slice(0, 2)
+                .join("")
+                .toUpperCase() || "UB";
+
+              return (
+                <div
+                  className="mt-3 rounded-xl flex items-center gap-3"
+                  style={{ background: "var(--prestador-bg)", padding: 12, border: "1px solid var(--prestador-border)" }}
+                >
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center animate-pulse"
+                    style={{ background: "rgba(13,184,126,0.15)", color: "#0DB87E" }}
+                  >
+                    <span className="font-display font-bold text-[14px]">{pInitials}</span>
+                  </div>
+                  <p className="font-sans text-[14px] font-semibold text-white">
+                    {pName}
+                  </p>
+                </div>
+              );
+            })()}
 
             <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
               <button

@@ -74,13 +74,18 @@ export default function LgpdGuard({ children }: LgpdGuardProps) {
           return;
         }
 
-        // 2. Check fast session cache
-        const cached = sessionStorage.getItem(`ubt_lgpd_verified_${authUser.id}`);
-        if (cached === "true") {
+        // 2. Check fast persistent / session cache
+        const isLocallyVerified =
+          localStorage.getItem(`ubt_lgpd_verified_${authUser.id}`) === "true" ||
+          localStorage.getItem(`ubt_terms_accepted_${authUser.id}`) === "true" ||
+          localStorage.getItem("ubt_terms_accepted") === "true" ||
+          sessionStorage.getItem(`ubt_lgpd_verified_${authUser.id}`) === "true";
+
+        if (isLocallyVerified) {
           if (active) {
             setChecking(false);
             if (location.pathname === "/app/consentimento") {
-              navigate("/app/home");
+              navigate("/app/home", { replace: true });
             }
           }
           return;
@@ -94,23 +99,27 @@ export default function LgpdGuard({ children }: LgpdGuardProps) {
 
         if (error) throw error;
 
-        // Verify if all required versions are accepted
+        // Verify if any or required versions are accepted
+        const hasAnyConsent = data && data.length > 0;
         const acceptedMap = new Set(
           (data || []).map((c) => `${c.document_type}:${c.document_version}`)
         );
 
-        const hasTerms = acceptedMap.has(`terms:${REQUIRED_VERSIONS.terms}`);
-        const hasPrivacy = acceptedMap.has(`privacy:${REQUIRED_VERSIONS.privacy}`);
-        const hasCookies = acceptedMap.has(`cookies:${REQUIRED_VERSIONS.cookies}`);
+        const hasTerms = acceptedMap.has(`terms:${REQUIRED_VERSIONS.terms}`) || (data || []).some((c) => c.document_type === "terms");
+        const hasPrivacy = acceptedMap.has(`privacy:${REQUIRED_VERSIONS.privacy}`) || (data || []).some((c) => c.document_type === "privacy");
+        const hasCookies = acceptedMap.has(`cookies:${REQUIRED_VERSIONS.cookies}`) || (data || []).some((c) => c.document_type === "cookies");
 
-        if (hasTerms && hasPrivacy && hasCookies) {
-          // Cache check result in session storage
+        if ((hasTerms && hasPrivacy && hasCookies) || hasAnyConsent) {
+          // Cache check result in persistent storage
+          localStorage.setItem(`ubt_lgpd_verified_${authUser.id}`, "true");
+          localStorage.setItem(`ubt_terms_accepted_${authUser.id}`, "true");
+          localStorage.setItem("ubt_terms_accepted", "true");
           sessionStorage.setItem(`ubt_lgpd_verified_${authUser.id}`, "true");
           
           if (active) {
             setChecking(false);
             if (location.pathname === "/app/consentimento") {
-              navigate("/app/home");
+              navigate("/app/home", { replace: true });
             }
           }
         } else {

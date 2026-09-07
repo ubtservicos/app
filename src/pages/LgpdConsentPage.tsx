@@ -20,6 +20,18 @@ export default function LgpdConsentPage() {
     }
   }, [user.role, navigate]);
 
+  useEffect(() => {
+    if (!user.uid) return;
+    const isVerified =
+      localStorage.getItem(`ubt_lgpd_verified_${user.uid}`) === "true" ||
+      localStorage.getItem(`ubt_terms_accepted_${user.uid}`) === "true" ||
+      localStorage.getItem("ubt_terms_accepted") === "true" ||
+      sessionStorage.getItem(`ubt_lgpd_verified_${user.uid}`) === "true";
+    if (isVerified) {
+      navigate("/app/home", { replace: true });
+    }
+  }, [user.uid, navigate]);
+
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [acceptPrivacy, setAcceptPrivacy] = useState(false);
   const [acceptCookies, setAcceptCookies] = useState(false);
@@ -71,7 +83,10 @@ export default function LgpdConsentPage() {
       const { error } = await supabase.from("user_consents").insert(consentsToInsert);
       if (error) throw error;
 
-      // Update session cache
+      // Update persistent and session storage
+      localStorage.setItem(`ubt_lgpd_verified_${user.uid}`, "true");
+      localStorage.setItem(`ubt_terms_accepted_${user.uid}`, "true");
+      localStorage.setItem("ubt_terms_accepted", "true");
       sessionStorage.setItem(`ubt_lgpd_verified_${user.uid}`, "true");
       
       // Go to app homepage

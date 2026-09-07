@@ -38,10 +38,22 @@ const services: ServiceItem[] = [
   // { label: "Aulas", Icon: GraduationCap, available: false },
 ];
 
+interface ActiveOrder {
+  id: string;
+  modalidade?: string;
+  status: string;
+  total?: number;
+  created_at: string;
+  prestador_id?: string;
+  delivery_address?: string;
+}
+
 const AppHome = () => {
   const navigate = useNavigate();
   const user = useCurrentUser();
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [activeOrders, setActiveOrders] = useState<ActiveOrder[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(true);
 
   useEffect(() => {
     if (user.role === "associacao") {
@@ -50,11 +62,54 @@ const AppHome = () => {
   }, [user.role, navigate]);
 
   useEffect(() => {
-    const onboarded = localStorage.getItem("ubt_onboarded_cliente");
-    if (!onboarded) {
+    const isTourCompleted =
+      localStorage.getItem("ubt_onboarded_cliente") === "true" ||
+      localStorage.getItem("ubt_tour_completed_cliente") === "true" ||
+      localStorage.getItem("tour_completed") === "true" ||
+      (user.uid ? localStorage.getItem(`ubt_tour_completed_${user.uid}`) === "true" : false);
+
+    if (!isTourCompleted && !user.isLoading) {
       setShowOnboarding(true);
     }
-  }, []);
+  }, [user.uid, user.isLoading]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchActiveOrders = async () => {
+      if (!user.uid) {
+        if (isMounted) {
+          setActiveOrders([]);
+          setLoadingOrders(false);
+        }
+        return;
+      }
+      try {
+        setLoadingOrders(true);
+        const { data, error } = await supabase
+          .from("pedidos")
+          .select("id, modalidade, status, total, created_at, prestador_id, delivery_address")
+          .eq("tomador_id", user.uid)
+          .in("status", ["pending", "searching", "accepted", "in_progress", "preparing", "aguardando_confirmacao"])
+          .order("created_at", { ascending: false })
+          .limit(5);
+
+        if (error) {
+          console.warn("Nenhum pedido ativo ou erro ao carregar pedidos:", error.message);
+          if (isMounted) setActiveOrders([]);
+        } else if (isMounted) {
+          setActiveOrders(data || []);
+        }
+      } catch (err) {
+        console.error("Erro ao buscar pedidos ativos:", err);
+        if (isMounted) setActiveOrders([]);
+      } finally {
+        if (isMounted) setLoadingOrders(false);
+      }
+    };
+
+    fetchActiveOrders();
+    return () => { isMounted = false; };
+  }, [user.uid]);
 
   // Load status rules and find rule for current user status
   const rules = getStatusRules();
@@ -325,34 +380,195 @@ const AppHome = () => {
           >
             Pedidos em Andamento
           </p>
-          <button style={{ background: "none", border: "none", color: "#0DB87E", fontSize: 12, fontFamily: "DM Sans", cursor: "pointer" }}>
-            Ver todos
-          </button>
+          {activeOrders.length > 0 && (
+            <button
+              onClick={() => navigate("/app/pedidos")}
+              style={{ background: "none", border: "none", color: "#0DB87E", fontSize: 12, fontFamily: "DM Sans", cursor: "pointer" }}
+            >
+              Ver todos
+            </button>
+          )}
         </div>
         
         <div className="mt-4 flex flex-col gap-3">
-          {/* Mockup de Pedido - Isso valeria para qualquer categoria */}
-          <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 16, padding: 16 }}>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <div style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(13,184,126,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <Sparkles size={14} color="#0DB87E" />
-                </div>
-                <span style={{ fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: "white" }}>Diarista</span>
+          {loadingOrders ? (
+            <div
+              style={{
+                background: "rgba(255,255,255,0.03)",
+                borderRadius: 16,
+                padding: "20px 16px",
+                textAlign: "center",
+                color: "rgba(255,255,255,0.4)",
+                fontFamily: "DM Sans",
+                fontSize: 13,
+              }}
+            >
+              Carregando pedidos em andamento...
+            </div>
+          ) : activeOrders.length === 0 ? (
+            /* Empty State Limpo */
+            <div
+              style={{
+                background: "rgba(255,255,255,0.03)",
+                border: "1px dashed rgba(255,255,255,0.08)",
+                borderRadius: 16,
+                padding: "28px 16px",
+                textAlign: "center",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: "50%",
+                  background: "rgba(255,255,255,0.05)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "rgba(255,255,255,0.4)",
+                  marginBottom: 2,
+                }}
+              >
+                <Clock size={20} />
               </div>
-              <span style={{ padding: "4px 8px", borderRadius: 999, background: "rgba(243,156,18,0.15)", color: "#F39C12", fontSize: 10, fontFamily: "DM Sans", fontWeight: 600 }}>Aguardando Confirmação</span>
+              <p
+                style={{
+                  fontFamily: "DM Sans",
+                  fontSize: 14,
+                  fontWeight: 600,
+                  color: "rgba(255,255,255,0.75)",
+                  margin: 0,
+                }}
+              >
+                Nenhum pedido em andamento
+              </p>
+              <p
+                style={{
+                  fontFamily: "DM Sans",
+                  fontSize: 12,
+                  color: "rgba(255,255,255,0.4)",
+                  margin: 0,
+                  maxWidth: 260,
+                  lineHeight: 1.5,
+                }}
+              >
+                Seus chamados ativos e agendamentos confirmados aparecerão aqui em tempo real.
+              </p>
             </div>
-            
-            <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "rgba(255,255,255,0.6)", margin: "0 0 4px 0" }}>Maria Silva</p>
-            <div className="flex items-center gap-2 mb-4">
-              <Clock size={12} color="rgba(255,255,255,0.4)" />
-              <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "rgba(255,255,255,0.4)" }}>Qua, 20/05 às 08:00</span>
-            </div>
+          ) : (
+            activeOrders.map((order) => {
+              const modalidadeLabel =
+                order.modalidade === "mototaxi"
+                  ? "Mototáxi"
+                  : order.modalidade === "diarista"
+                  ? "Diarista"
+                  : order.modalidade === "ambulante"
+                  ? "Ambulante"
+                  : order.modalidade === "coco"
+                  ? "Côco & Cia"
+                  : "Serviço";
 
-            <button style={{ width: "100%", height: 36, borderRadius: 8, background: "rgba(255,255,255,0.05)", border: "none", color: "white", fontFamily: "DM Sans", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, cursor: "pointer" }}>
-              Acompanhar Pedido <ChevronRight size={14} color="rgba(255,255,255,0.4)" />
-            </button>
-          </div>
+              const ModalidadeIcon =
+                order.modalidade === "mototaxi"
+                  ? Bike
+                  : order.modalidade === "diarista"
+                  ? Sparkles
+                  : order.modalidade === "coco"
+                  ? Recycle
+                  : ShoppingBag;
+
+              const formattedDate = new Date(order.created_at).toLocaleString("pt-BR", {
+                dateStyle: "short",
+                timeStyle: "short",
+              });
+
+              return (
+                <div
+                  key={order.id}
+                  style={{
+                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: 16,
+                    padding: 16,
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 8,
+                          background: "rgba(13,184,126,0.15)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <ModalidadeIcon size={14} color="#0DB87E" />
+                      </div>
+                      <span style={{ fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: "white" }}>
+                        {modalidadeLabel}
+                      </span>
+                    </div>
+                    <span
+                      style={{
+                        padding: "4px 8px",
+                        borderRadius: 999,
+                        background: "rgba(243,156,18,0.15)",
+                        color: "#F39C12",
+                        fontSize: 10,
+                        fontFamily: "DM Sans",
+                        fontWeight: 600,
+                        textTransform: "capitalize",
+                      }}
+                    >
+                      {order.status.replace(/_/g, " ")}
+                    </span>
+                  </div>
+
+                  {order.delivery_address && (
+                    <p style={{ fontFamily: "DM Sans", fontSize: 13, color: "rgba(255,255,255,0.6)", margin: "0 0 4px 0" }}>
+                      {order.delivery_address}
+                    </p>
+                  )}
+
+                  <div className="flex items-center gap-2 mb-4">
+                    <Clock size={12} color="rgba(255,255,255,0.4)" />
+                    <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "rgba(255,255,255,0.4)" }}>
+                      {formattedDate}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => navigate(order.modalidade ? `/app/${order.modalidade}` : "/app/home")}
+                    style={{
+                      width: "100%",
+                      height: 36,
+                      borderRadius: 8,
+                      background: "rgba(255,255,255,0.05)",
+                      border: "none",
+                      color: "white",
+                      fontFamily: "DM Sans",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 6,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Acompanhar Pedido <ChevronRight size={14} color="rgba(255,255,255,0.4)" />
+                  </button>
+                </div>
+              );
+            })
+          )}
         </div>
       </section>
       
@@ -361,6 +577,11 @@ const AppHome = () => {
           role="cliente"
           onClose={() => {
             localStorage.setItem("ubt_onboarded_cliente", "true");
+            localStorage.setItem("ubt_tour_completed_cliente", "true");
+            localStorage.setItem("tour_completed", "true");
+            if (user.uid) {
+              localStorage.setItem(`ubt_tour_completed_${user.uid}`, "true");
+            }
             setShowOnboarding(false);
           }}
         />
