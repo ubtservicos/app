@@ -1,8 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, X, Star, Filter, ChevronRight, Award, Gift, Heart, ArrowUpRight, ArrowDownLeft } from "lucide-react";
-import { MOCK_USERS, AdminUser } from "@/mocks/adminData";
-import { Card, Avatar, Pill, KYC_PILL, GhostButton, PrimaryButton } from "@/components/admin/ui";
+import { Search, X, Filter, ChevronRight, Award, Gift, ArrowUpRight, ArrowDownLeft, Building2 } from "lucide-react";
+import { Card, Avatar, Pill, KYC_PILL } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
 import { getStatusRules, STATUS_THEMES, StatusRule } from "@/lib/statusRules";
@@ -25,44 +24,16 @@ const MONTHS = [
 const formatBR = (n: number) =>
   "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const getDonations = (id: string, totalContrib: number) => {
-  const entities = ["Lar dos Velhinhos", "Recicla Ubatuba", "Sinfônica Jovem", "Pro-Surf Ubatuba"];
-  let sum = 0;
-  for (let i = 0; i < id.length; i++) {
-    sum += id.charCodeAt(i);
-  }
-  
-  const numEnts = (sum % 2) + 1; // 1 ou 2 entidades
-  const donationsList: { entity: string; amount: number }[] = [];
-  
-  if (numEnts === 1) {
-    const entIndex = sum % entities.length;
-    donationsList.push({
-      entity: entities[entIndex],
-      amount: totalContrib
-    });
-  } else {
-    const ent1Index = sum % entities.length;
-    const ent2Index = (sum + 1) % entities.length;
-    donationsList.push({
-      entity: entities[ent1Index],
-      amount: totalContrib * 0.6
-    });
-    donationsList.push({
-      entity: entities[ent2Index],
-      amount: totalContrib * 0.4
-    });
-  }
-  return donationsList;
-};
-
 export default function AdminClientesPage() {
   const navigate = useNavigate();
   const toast = useAdminToast();
   const [dbUsers, setDbUsers] = useState<any[]>([]);
+  const [dbProfiles, setDbProfiles] = useState<any[]>([]);
   const [dbPedidos, setDbPedidos] = useState<any[]>([]);
+  const [mototaxisMap, setMototaxisMap] = useState<Map<string, any>>(new Map());
   const [diaristasMap, setDiaristasMap] = useState<Map<string, any>>(new Map());
   const [caminhoesMap, setCaminhoesMap] = useState<Map<string, any>>(new Map());
+  const [userAssocMap, setUserAssocMap] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("todos");
   const [q, setQ] = useState("");
@@ -86,42 +57,88 @@ export default function AdminClientesPage() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const { data: rawUsers, error } = await supabase
+        // 1. Buscar usuários
+        const { data: rawUsers, error: errUsers } = await supabase
           .from("usuarios")
           .select("*");
-        if (error) throw error;
+        if (errUsers) throw errUsers;
+
+        // 2. Buscar profiles para complementar dados
+        const { data: rawProfiles } = await supabase
+          .from("profiles")
+          .select("*");
         
-        if (rawUsers) {
-          // Buscar avaliações/serviços de diarista_perfis
-          const { data: diaristas } = await supabase
-            .from("diarista_perfis")
-            .select("user_id, rating, total_servicos");
-          
-          const dMap = new Map<string, any>();
-          if (diaristas) {
-            diaristas.forEach((d) => dMap.set(d.user_id, d));
-          }
-
-          // Buscar placas de coco_caminhoes
-          const { data: caminhoes } = await supabase
-            .from("coco_caminhoes")
-            .select("prestador_id, plate");
-          
-          const cMap = new Map<string, any>();
-          if (caminhoes) {
-            caminhoes.forEach((c) => cMap.set(c.prestador_id, c));
-          }
-
-          // Buscar todos os pedidos para calcular recebidos e pagos (selecionando created_at para filtrar período!)
-          const { data: rawPedidos } = await supabase
-            .from("pedidos")
-            .select("tomador_id, prestador_id, total, status, created_at");
-
-          setDbUsers(rawUsers);
-          setDiaristasMap(dMap);
-          setCaminhoesMap(cMap);
-          setDbPedidos(rawPedidos || []);
+        // 3. Buscar mototaxi
+        const { data: rawMototaxis } = await supabase
+          .from("prestador_mototaxi")
+          .select("user_id, kyc_status, modalidade, plate, is_online");
+        const motoMap = new Map<string, any>();
+        if (rawMototaxis) {
+          rawMototaxis.forEach((m) => motoMap.set(m.user_id, m));
         }
+
+        // 4. Buscar diarista_perfis
+        const { data: diaristas } = await supabase
+          .from("diarista_perfis")
+          .select("user_id, rating, total_servicos, is_online");
+        const dMap = new Map<string, any>();
+        if (diaristas) {
+          diaristas.forEach((d) => dMap.set(d.user_id, d));
+        }
+
+        // 5. Buscar coco_caminhoes
+        const { data: caminhoes } = await supabase
+          .from("coco_caminhoes")
+          .select("prestador_id, plate, status_aprovacao, is_online");
+        const cMap = new Map<string, any>();
+        if (caminhoes) {
+          caminhoes.forEach((c) => cMap.set(c.prestador_id, c));
+        }
+
+        // 6. Buscar associações reais
+        const { data: assocs } = await supabase
+          .from("associations")
+          .select("id, name");
+        const assocNames = new Map<string, string>();
+        if (assocs) {
+          assocs.forEach((a) => assocNames.set(a.id, a.name));
+        }
+
+        const { data: provAssocs } = await supabase
+          .from("provider_associations")
+          .select("provider_id, association_id");
+        const { data: membAssocs } = await supabase
+          .from("associacao_membros")
+          .select("prestador_id, associacao_id");
+
+        const uAssocMap = new Map<string, string>();
+        if (provAssocs) {
+          provAssocs.forEach((pa) => {
+            if (assocNames.has(pa.association_id)) {
+              uAssocMap.set(pa.provider_id, assocNames.get(pa.association_id)!);
+            }
+          });
+        }
+        if (membAssocs) {
+          membAssocs.forEach((ma) => {
+            if (assocNames.has(ma.association_id)) {
+              uAssocMap.set(ma.prestador_id, assocNames.get(ma.association_id)!);
+            }
+          });
+        }
+
+        // 7. Buscar pedidos para cálculo financeiro
+        const { data: rawPedidos } = await supabase
+          .from("pedidos")
+          .select("tomador_id, prestador_id, total, status, created_at");
+
+        setDbUsers(rawUsers || []);
+        setDbProfiles(rawProfiles || []);
+        setMototaxisMap(motoMap);
+        setDiaristasMap(dMap);
+        setCaminhoesMap(cMap);
+        setUserAssocMap(uAssocMap);
+        setDbPedidos(rawPedidos || []);
       } catch (e) {
         console.error("Erro ao buscar usuários no admin:", e);
       } finally {
@@ -134,8 +151,11 @@ export default function AdminClientesPage() {
   }, []);
 
   const users = useMemo(() => {
-    if (dbUsers.length === 0) return [];
+    if (dbUsers.length === 0 && dbProfiles.length === 0) return [];
     
+    const profMap = new Map<string, any>();
+    dbProfiles.forEach((p) => profMap.set(p.id, p));
+
     const now = new Date();
     const filteredPedidos = dbPedidos.filter((p: any) => {
       if (filterPeriod === "all") return true;
@@ -150,26 +170,47 @@ export default function AdminClientesPage() {
     });
 
     return dbUsers.map((u: any) => {
-      const isColab = u.role === "cocoecia-colaborador" || u.role === "cocoecia-dirigentes" || u.role === "cocoecia";
-      const isDiarista = diaristasMap.has(u.id);
+      const prof = profMap.get(u.id);
+      const moto = mototaxisMap.get(u.id);
+      const diarista = diaristasMap.get(u.id);
       const caminhao = caminhoesMap.get(u.id);
-      
-      const categories: string[] = [];
-      if (isColab) {
-        categories.push("Reciclagem");
-      }
-      if (isDiarista) {
-        categories.push("Diarista");
-      } else {
-        if (isColab) categories.push("Reciclagem");
-        if (isDiarista) categories.push("Diarista");
-        if (u.role === "prestador" && !isColab && !isDiarista) categories.push("Mototaxi");
-        if (categories.length === 0 && u.role === "prestador") categories.push("Geral");
+
+      // Serviços Ativos Reais
+      const services: string[] = [];
+
+      // Mototáxi: apenas se aprovado na tabela de mototáxi
+      if (moto && moto.kyc_status === "approved") {
+        services.push(moto.modalidade === "entrega" ? "Entrega" : "Mototáxi");
       }
 
-      const cleanName = u.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, ".");
-      const ratingVal = isDiarista ? Number(diaristasMap.get(u.id).rating || 5.0) : null;
-      const totalRidesVal = isDiarista ? Number(diaristasMap.get(u.id).total_servicos || 0) : undefined;
+      // Diarista: se cadastrado em diarista_perfis
+      if (diarista) {
+        services.push("Diarista");
+      }
+
+      // Reciclagem: se aprovado em coco_caminhoes ou com papel cocoecia
+      const isColab = u.role === "cocoecia-colaborador" || u.role === "cocoecia-dirigentes" || u.role === "cocoecia";
+      if (isColab || (caminhao && caminhao.status_aprovacao === "approved")) {
+        services.push("Reciclagem");
+      }
+
+      // KYC Status
+      let kycStatus: "approved" | "pending" | "rejected" | undefined = undefined;
+      if (moto) {
+        kycStatus = moto.kyc_status;
+      } else if (caminhao) {
+        kycStatus = caminhao.status_aprovacao === "approved" ? "approved" : "pending";
+      } else if (diarista) {
+        kycStatus = "approved";
+      } else if (u.role === "prestador" || isColab) {
+        kycStatus = "pending";
+      }
+
+      // Associação Real
+      const associacao = userAssocMap.get(u.id) || null;
+
+      const ratingVal = diarista ? Number(diaristasMap.get(u.id).rating || 5.0) : null;
+      const totalRidesVal = diarista ? Number(diaristasMap.get(u.id).total_servicos || 0) : undefined;
 
       const userPedidos = filteredPedidos || [];
       const validStatuses = ["completed", "confirmed", "rating", "preparing", "ready"];
@@ -184,23 +225,27 @@ export default function AdminClientesPage() {
 
       const birthMonth = getBirthMonth(u.id);
       const ticketsConsumidor = userPedidos.filter((p: any) => p.tomador_id === u.id && validStatuses.includes(p.status)).length;
-      const ticketsTrabalhador = (u.role === "prestador" || isColab || isDiarista)
+      const ticketsTrabalhador = (u.role === "prestador" || isColab || diarista || moto)
         ? userPedidos.filter((p: any) => p.prestador_id === u.id && validStatuses.includes(p.status)).length
         : 0;
+      
       const contribComunidade = (pagos + recebidos) * 0.01;
-      const donations = getDonations(u.id, contribComunidade);
-      const status = u.status || "active";
+      const status = u.status || (prof?.is_active === false ? "inactive" : "active");
+      const name = u.nome || prof?.name || "Sem nome";
+      const email = prof?.email || u.email || "Não informado";
+      const phone = prof?.phone || u.phone || "Não cadastrado";
 
       return {
         id: u.id,
-        name: u.nome,
-        role: u.role.startsWith("cocoecia") || u.role === "prestador" ? "prestador" : "tomador",
-        email: u.email || "Não informado",
-        phone: u.phone || "Não cadastrado",
-        createdAt: u.created_at || new Date().toISOString(),
-        kycStatus: u.role === "prestador" || isColab ? "approved" : "pending",
-        categories: categories.length > 0 ? categories : undefined,
-        plate: caminhao?.plate || undefined,
+        name,
+        role: (u.role && (u.role.startsWith("cocoecia") || u.role === "prestador")) || services.length > 0 ? "prestador" : "tomador",
+        email,
+        phone,
+        createdAt: u.created_at || prof?.created_at || new Date().toISOString(),
+        kycStatus,
+        services,
+        associacao,
+        plate: moto?.plate || caminhao?.plate || undefined,
         rating: ratingVal,
         totalRides: totalRidesVal,
         status,
@@ -210,10 +255,9 @@ export default function AdminClientesPage() {
         ticketsConsumidor,
         ticketsTrabalhador,
         contribComunidade,
-        donations,
       };
     });
-  }, [dbUsers, dbPedidos, diaristasMap, caminhoesMap, filterPeriod]);
+  }, [dbUsers, dbProfiles, dbPedidos, mototaxisMap, diaristasMap, caminhoesMap, userAssocMap, filterPeriod]);
 
   const filtered = useMemo(() => {
     const ql = q.toLowerCase();
@@ -223,7 +267,7 @@ export default function AdminClientesPage() {
         (tab === "prestadores" && (u.role === "prestador" || (u.recebidos ?? 0) > 0));
       const okQ = !ql || u.name.toLowerCase().includes(ql) || u.email.toLowerCase().includes(ql);
       const okMonth = filterMonth === "all" || u.birthMonth === Number(filterMonth);
-      const okCategory = filterCategory === "all" || (u.categories ?? []).includes(filterCategory);
+      const okCategory = filterCategory === "all" || (u.services ?? []).includes(filterCategory);
       return okTab && okQ && okMonth && okCategory;
     });
   }, [users, tab, q, filterMonth, filterCategory]);
@@ -308,10 +352,10 @@ export default function AdminClientesPage() {
             }}
           >
             <option value="all">Serviço: Todos</option>
-            <option value="Reciclagem">Reciclagem</option>
+            <option value="Mototáxi">Mototáxi</option>
             <option value="Diarista">Diarista</option>
-            <option value="Mototaxi">Mototaxi</option>
-            <option value="Geral">Geral (Outros)</option>
+            <option value="Reciclagem">Reciclagem</option>
+            <option value="Entrega">Entrega</option>
           </select>
 
           <select
@@ -436,7 +480,7 @@ export default function AdminClientesPage() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead style={{ background: "var(--admin-bg)" }}>
                 <tr>
-                  {["Nome", "Papel", "Cadastro", "Serviços", "Prêmio 1/5", "Prêmio 1/11", "Categoria", "Coletivo", "Recebidos", "Pagos"]
+                  {["Nome", "Papel", "Cadastro", "Serviços", "Prêmio 1/5", "Prêmio 1/11", "Associação", "Coletivo", "Recebidos", "Pagos"]
                     .map((h) => (
                       <th
                         key={h}
@@ -488,7 +532,7 @@ export default function AdminClientesPage() {
                         <Pill bg="rgba(43,110,232,0.10)" color="#2B6EE8" size="sm">
                           tomador
                         </Pill>
-                        {(u.role === "prestador" || (u.recebidos ?? 0) > 0) && (
+                        {(u.role === "prestador" || (u.recebidos ?? 0) > 0 || (u.services ?? []).length > 0) && (
                           <Pill bg="rgba(13,184,126,0.10)" color="#0DB87E" size="sm">
                             prestador
                           </Pill>
@@ -496,7 +540,7 @@ export default function AdminClientesPage() {
                       </div>
                     </td>
                     <td style={{ padding: "10px 14px" }}>
-                      {u.role === "prestador" && u.kycStatus ? (
+                      {u.kycStatus ? (
                         <Pill {...KYC_PILL[u.kycStatus]} size="sm">
                           {KYC_PILL[u.kycStatus].label}
                         </Pill>
@@ -506,12 +550,12 @@ export default function AdminClientesPage() {
                     </td>
                     <td style={{ padding: "10px 14px" }}>
                       <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                        {(u.categories ?? []).map((c) => (
-                          <Pill key={c} bg="var(--admin-bg)" color="var(--admin-subtle)" size="sm">
-                            {c}
+                        {(u.services ?? []).map((s: string) => (
+                          <Pill key={s} bg="var(--admin-bg)" color="var(--admin-subtle)" size="sm">
+                            {s}
                           </Pill>
                         ))}
-                        {(u.categories ?? []).length === 0 && (
+                        {(u.services ?? []).length === 0 && (
                           <span style={{ color: "var(--admin-muted)", fontFamily: "DM Sans", fontSize: 13 }}>—</span>
                         )}
                       </div>
@@ -523,28 +567,22 @@ export default function AdminClientesPage() {
                       {u.ticketsConsumidor ?? 0}
                     </td>
                     <td style={{ padding: "10px 14px" }}>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                        {(u.donations ?? []).map((d, i) => (
-                          <div key={i} style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)" }}>
-                            {d.entity}
-                          </div>
-                        ))}
-                        {(u.donations ?? []).length === 0 && (
-                          <span style={{ color: "var(--admin-muted)", fontFamily: "DM Sans", fontSize: 13 }}>—</span>
-                        )}
-                      </div>
+                      {u.associacao ? (
+                        <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-subtle)", fontWeight: 500 }}>
+                          {u.associacao}
+                        </span>
+                      ) : (
+                        <span style={{ color: "var(--admin-muted)", fontFamily: "DM Sans", fontSize: 13 }}>—</span>
+                      )}
                     </td>
-                    <td style={{ padding: "10px 14px" }}>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
-                        {(u.donations ?? []).map((d, i) => (
-                          <div key={i} style={{ fontFamily: "Syne", fontSize: 13, fontWeight: 700, color: "#9B59B6" }}>
-                            {formatBR(d.amount)}
-                          </div>
-                        ))}
-                        {(u.donations ?? []).length === 0 && (
-                          <span style={{ color: "var(--admin-muted)", fontFamily: "DM Sans", fontSize: 13 }}>—</span>
-                        )}
-                      </div>
+                    <td style={{ padding: "10px 14px", textAlign: "right" }}>
+                      {u.contribComunidade > 0 ? (
+                        <span style={{ fontFamily: "Syne", fontSize: 13, fontWeight: 700, color: "#9B59B6" }}>
+                          {formatBR(u.contribComunidade)}
+                        </span>
+                      ) : (
+                        <span style={{ color: "var(--admin-muted)", fontFamily: "DM Sans", fontSize: 13 }}>—</span>
+                      )}
                     </td>
                     <td style={{ padding: "10px 14px", textAlign: "right", fontFamily: "Syne", fontSize: 14, fontWeight: 700, color: "#0DB87E" }}>
                       {formatBR(u.recebidos || 0)}
@@ -626,7 +664,7 @@ export default function AdminClientesPage() {
                     }}>
                       tomador
                     </span>
-                    {(u.role === "prestador" || (u.recebidos ?? 0) > 0) && (
+                    {(u.role === "prestador" || (u.recebidos ?? 0) > 0 || (u.services ?? []).length > 0) && (
                       <span style={{
                         fontFamily: "DM Sans",
                         fontSize: 10,
@@ -643,7 +681,7 @@ export default function AdminClientesPage() {
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                {u.role === "prestador" && u.kycStatus && (
+                {u.kycStatus && (
                   <span style={{
                     fontFamily: "DM Sans",
                     fontSize: 11,
@@ -660,11 +698,11 @@ export default function AdminClientesPage() {
               </div>
             </div>
 
-            {/* Services / Categories Tags */}
-            {(u.categories ?? []).length > 0 && (
+            {/* Services Tags */}
+            {(u.services ?? []).length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {(u.categories ?? []).map((c) => (
-                  <span key={c} style={{
+                {(u.services ?? []).map((s: string) => (
+                  <span key={s} style={{
                     fontFamily: "DM Sans",
                     fontSize: 11,
                     fontWeight: 600,
@@ -674,7 +712,7 @@ export default function AdminClientesPage() {
                     borderRadius: 6,
                     padding: "2px 8px"
                   }}>
-                    {c}
+                    {s}
                   </span>
                 ))}
               </div>
@@ -735,32 +773,28 @@ export default function AdminClientesPage() {
               </div>
             </div>
 
-            {/* Coletivo (Doações) Box */}
-            {(u.donations ?? []).length > 0 && (
+            {/* Associação & Coletivo Box */}
+            {(u.associacao || u.contribComunidade > 0) && (
               <div style={{
-                background: "rgba(155, 89, 182, 0.02)",
-                border: "1px solid rgba(155, 89, 182, 0.08)",
+                background: "rgba(155, 89, 182, 0.03)",
+                border: "1px solid rgba(155, 89, 182, 0.1)",
                 borderRadius: 12,
                 padding: 12,
                 display: "flex",
                 flexDirection: "column",
-                gap: 8
+                gap: 6
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <Heart size={13} color="#9B59B6" fill="#9B59B6" style={{ opacity: 0.8 }} />
+                  <Building2 size={13} color="#9B59B6" style={{ opacity: 0.8 }} />
                   <span style={{ fontFamily: "DM Sans", fontSize: 10, fontWeight: 700, color: "#9B59B6", textTransform: "uppercase", letterSpacing: 0.5 }}>
-                    Doações Coletivo
+                    Associação & Fundo Coletivo
                   </span>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  {(u.donations ?? []).map((d, idx) => (
-                    <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-subtle)" }}>{d.entity}</span>
-                      <span style={{ fontFamily: "Syne", fontSize: 12, fontWeight: 700, color: "#9B59B6" }}>
-                        {formatBR(d.amount)}
-                      </span>
-                    </div>
-                  ))}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontFamily: "DM Sans", fontSize: 12, color: "var(--admin-subtle)" }}>{u.associacao || "Sem associação vinculada"}</span>
+                  <span style={{ fontFamily: "Syne", fontSize: 12, fontWeight: 700, color: "#9B59B6" }}>
+                    {formatBR(u.contribComunidade)}
+                  </span>
                 </div>
               </div>
             )}
@@ -845,7 +879,7 @@ export default function AdminClientesPage() {
 
               {/* Category Select */}
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)" }}>Serviço / Categoria</span>
+                <span style={{ fontFamily: "DM Sans", fontSize: 12, fontWeight: 600, color: "var(--admin-subtle)" }}>Serviço</span>
                 <select
                   value={filterCategory}
                   onChange={(e) => { setFilterCategory(e.target.value); setPage(0); }}
@@ -864,10 +898,10 @@ export default function AdminClientesPage() {
                   }}
                 >
                   <option value="all">Todos os Serviços</option>
-                  <option value="Reciclagem">Reciclagem</option>
+                  <option value="Mototáxi">Mototáxi</option>
                   <option value="Diarista">Diarista</option>
-                  <option value="Mototaxi">Mototaxi</option>
-                  <option value="Geral">Geral (Outros)</option>
+                  <option value="Reciclagem">Reciclagem</option>
+                  <option value="Entrega">Entrega</option>
                 </select>
               </div>
 

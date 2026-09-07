@@ -35,7 +35,8 @@ interface DetailUser {
   phone: string;
   createdAt: string;
   kycStatus?: "approved" | "pending" | "rejected";
-  categories?: string[];
+  services?: string[];
+  associacao?: string | null;
   plate?: string;
   rating?: number | null;
   totalRides?: number;
@@ -44,42 +45,10 @@ interface DetailUser {
   ticketsTrabalhador?: number;
   ticketsConsumidor?: number;
   contribComunidade?: number;
-  donations?: { entity: string; amount: number }[];
 }
 
 const formatBR = (n: number) =>
   "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const getDonations = (id: string, totalContrib: number) => {
-  const entities = ["Lar dos Velhinhos", "Recicla Ubatuba", "Sinfônica Jovem", "Pro-Surf Ubatuba"];
-  let sum = 0;
-  for (let i = 0; i < id.length; i++) {
-    sum += id.charCodeAt(i);
-  }
-  
-  const numEnts = (sum % 2) + 1; // 1 ou 2 entidades
-  const donationsList: { entity: string; amount: number }[] = [];
-  
-  if (numEnts === 1) {
-    const entIndex = sum % entities.length;
-    donationsList.push({
-      entity: entities[entIndex],
-      amount: totalContrib
-    });
-  } else {
-    const ent1Index = sum % entities.length;
-    const ent2Index = (sum + 1) % entities.length;
-    donationsList.push({
-      entity: entities[ent1Index],
-      amount: totalContrib * 0.6
-    });
-    donationsList.push({
-      entity: entities[ent2Index],
-      amount: totalContrib * 0.4
-    });
-  }
-  return donationsList;
-};
 
 const STATUS_PILL: Record<string, { bg: string; color: string; label: string }> = {
   completed: { bg: "rgba(13,184,126,0.10)", color: "#0DB87E", label: "Concluído" },
@@ -97,8 +66,11 @@ export default function AdminClienteDetailPage() {
   const toast = useAdminToast();
 
   const [dbUser, setDbUser] = useState<any | null>(null);
+  const [dbProfile, setDbProfile] = useState<any | null>(null);
+  const [mototaxi, setMototaxi] = useState<any | null>(null);
   const [diarista, setDiarista] = useState<any | null>(null);
   const [caminhao, setCaminhao] = useState<any | null>(null);
+  const [associacaoNome, setAssociacaoNome] = useState<string | null>(null);
   const [dbOrders, setDbOrders] = useState<any[]>([]);
   const [filterPeriod, setFilterPeriod] = useState<string>("all");
   const [loading, setLoading] = useState(true);
@@ -120,6 +92,7 @@ export default function AdminClienteDetailPage() {
     if (!id) return;
     setLoading(true);
     try {
+      // 1. Buscar usuário
       const { data: userData, error: errUser } = await supabase
         .from("usuarios")
         .select("*")
@@ -133,20 +106,59 @@ export default function AdminClienteDetailPage() {
         return;
       }
 
-      // Buscar perfis adicionais (diaristas, caminhões)
+      // 2. Buscar profile
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+
+      // 3. Buscar mototáxi
+      const { data: motoData } = await supabase
+        .from("prestador_mototaxi")
+        .select("kyc_status, modalidade, plate, is_online")
+        .eq("user_id", id)
+        .maybeSingle();
+
+      // 4. Buscar diarista
       const { data: diaristaData } = await supabase
         .from("diarista_perfis")
         .select("rating, total_servicos")
         .eq("user_id", id)
         .maybeSingle();
 
+      // 5. Buscar caminhão
       const { data: caminhaoData } = await supabase
         .from("coco_caminhoes")
-        .select("plate")
+        .select("plate, status_aprovacao")
         .eq("prestador_id", id)
         .maybeSingle();
 
-      // Buscar pedidos relacionados
+      // 6. Buscar associação
+      let assocName: string | null = null;
+      const { data: provAssoc } = await supabase
+        .from("provider_associations")
+        .select("association_id")
+        .eq("provider_id", id)
+        .maybeSingle();
+
+      const { data: membAssoc } = await supabase
+        .from("associacao_membros")
+        .select("association_id")
+        .eq("prestador_id", id)
+        .maybeSingle();
+
+      const assocId = provAssoc?.association_id || membAssoc?.association_id;
+      if (assocId) {
+        const { data: assocData } = await supabase
+          .from("associations")
+          .select("name")
+          .eq("id", assocId)
+          .maybeSingle();
+        if (assocData) assocName = assocData.name;
+      }
+
+      // 7. Buscar pedidos relacionados
       const { data: dbPedidos, error: errPedidos } = await supabase
         .from("pedidos")
         .select("*")
@@ -156,8 +168,11 @@ export default function AdminClienteDetailPage() {
       if (errPedidos) throw errPedidos;
 
       setDbUser(userData);
+      setDbProfile(profileData);
+      setMototaxi(motoData);
       setDiarista(diaristaData);
       setCaminhao(caminhaoData);
+      setAssociacaoNome(assocName);
       setDbOrders(dbPedidos || []);
 
     } catch (err) {
@@ -199,42 +214,53 @@ export default function AdminClienteDetailPage() {
       .reduce((acc: number, p: any) => acc + Number(p.total || 0), 0);
 
     const isColab = dbUser.role === "cocoecia-colaborador" || dbUser.role === "cocoecia-dirigentes" || dbUser.role === "cocoecia";
-    const isDiarista = !!diarista;
 
-    const categories: string[] = [];
-    if (isColab) {
-      categories.push("Reciclagem");
+    const services: string[] = [];
+    if (mototaxi && mototaxi.kyc_status === "approved") {
+      services.push(mototaxi.modalidade === "entrega" ? "Entrega" : "Mototáxi");
     }
-    if (isDiarista) {
-      categories.push("Diarista");
-    } else {
-      if (isColab) categories.push("Reciclagem");
-      if (isDiarista) categories.push("Diarista");
-      if (dbUser.role === "prestador" && !isColab && !isDiarista) categories.push("Mototaxi");
-      if (categories.length === 0 && dbUser.role === "prestador") categories.push("Geral");
+    if (diarista) {
+      services.push("Diarista");
+    }
+    if (isColab || (caminhao && caminhao.status_aprovacao === "approved")) {
+      services.push("Reciclagem");
     }
 
-    const cleanName = dbUser.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, ".");
+    let kycStatus: "approved" | "pending" | "rejected" | undefined = undefined;
+    if (mototaxi) {
+      kycStatus = mototaxi.kyc_status;
+    } else if (caminhao) {
+      kycStatus = caminhao.status_aprovacao === "approved" ? "approved" : "pending";
+    } else if (diarista) {
+      kycStatus = "approved";
+    } else if (dbUser.role === "prestador" || isColab) {
+      kycStatus = "pending";
+    }
+
     const ratingVal = diarista ? Number(diarista.rating || 5.0) : null;
     const totalRidesVal = diarista ? Number(diarista.total_servicos || 0) : undefined;
 
     const ticketsConsumidor = filtered.filter((p: any) => p.tomador_id === id && validStatuses.includes(p.status)).length;
-    const ticketsTrabalhador = (dbUser.role === "prestador" || isColab || isDiarista)
+    const ticketsTrabalhador = (dbUser.role === "prestador" || isColab || diarista || mototaxi)
       ? filtered.filter((p: any) => p.prestador_id === id && validStatuses.includes(p.status)).length
       : 0;
     const contribComunidade = (pagos + recebidos) * 0.01;
-    const donations = getDonations(id || "", contribComunidade);
+
+    const name = dbUser.nome || dbProfile?.name || "Sem nome";
+    const email = dbProfile?.email || dbUser.email || "Não informado";
+    const phone = dbProfile?.phone || dbUser.phone || "Não cadastrado";
 
     const detailUser: DetailUser = {
       id: dbUser.id,
-      name: dbUser.nome,
-      role: dbUser.role.startsWith("cocoecia") || dbUser.role === "prestador" ? "prestador" : "tomador",
-      email: dbUser.email || "Não informado",
-      phone: dbUser.phone || "Não cadastrado",
-      createdAt: dbUser.created_at || new Date().toISOString(),
-      kycStatus: dbUser.role === "prestador" || isColab ? "approved" : "pending",
-      categories: categories.length > 0 ? categories : undefined,
-      plate: caminhao?.plate || undefined,
+      name,
+      role: (dbUser.role && (dbUser.role.startsWith("cocoecia") || dbUser.role === "prestador")) || services.length > 0 ? "prestador" : "tomador",
+      email,
+      phone,
+      createdAt: dbUser.created_at || dbProfile?.created_at || new Date().toISOString(),
+      kycStatus,
+      services,
+      associacao: associacaoNome,
+      plate: mototaxi?.plate || caminhao?.plate || undefined,
       rating: ratingVal,
       totalRides: totalRidesVal,
       pagos,
@@ -242,7 +268,6 @@ export default function AdminClienteDetailPage() {
       ticketsConsumidor,
       ticketsTrabalhador,
       contribComunidade,
-      donations,
     };
 
     const mappedOrders: OrderItem[] = filtered.map((p: any) => {
@@ -261,7 +286,7 @@ export default function AdminClienteDetailPage() {
     });
 
     return { orders: mappedOrders, user: detailUser };
-  }, [dbUser, dbOrders, diarista, caminhao, filterPeriod, id]);
+  }, [dbUser, dbProfile, dbOrders, mototaxi, diarista, caminhao, associacaoNome, filterPeriod, id]);
 
   const setKyc = async (status: "approved" | "rejected") => {
     if (!dbUser) return;
@@ -627,7 +652,7 @@ export default function AdminClienteDetailPage() {
 
           <Card style={{ padding: 24 }}>
             <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px" }}>
-              Prêmios & Coletivo (Doações)
+              Prêmios & Fundo Coletivo
             </h2>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div>
@@ -643,19 +668,14 @@ export default function AdminClienteDetailPage() {
                 </div>
               </div>
               <div style={{ gridColumn: "span 2", borderTop: "1px solid var(--admin-bg)", paddingTop: 12 }}>
-                <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)", marginBottom: 6 }}>Coletivo (Doações por Entidade)</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {(user.donations ?? []).map((d, idx) => (
-                    <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-subtle)" }}>{d.entity}</span>
-                      <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#9B59B6" }}>
-                        {formatBR(d.amount)}
-                      </span>
-                    </div>
-                  ))}
-                  {(user.donations ?? []).length === 0 && (
-                    <span style={{ fontFamily: "DM Sans", fontSize: 13, color: "var(--admin-muted)" }}>—</span>
-                  )}
+                <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)", marginBottom: 6 }}>Associação & Fundo Coletivo</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-subtle)" }}>
+                    {user.associacao || "Sem associação vinculada"}
+                  </span>
+                  <span style={{ fontFamily: "Syne", fontSize: 15, fontWeight: 700, color: "#9B59B6" }}>
+                    {(user.contribComunidade ?? 0) > 0 ? formatBR(user.contribComunidade ?? 0) : "—"}
+                  </span>
                 </div>
               </div>
             </div>
@@ -691,13 +711,16 @@ export default function AdminClienteDetailPage() {
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Categorias</div>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Serviços Ativos</div>
                   <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
-                    {(user.categories ?? []).map((c) => (
-                      <Pill key={c} bg="var(--admin-bg)" color="var(--admin-subtle)" size="sm">
-                        {c}
+                    {(user.services ?? []).map((s) => (
+                      <Pill key={s} bg="var(--admin-bg)" color="var(--admin-subtle)" size="sm">
+                        {s}
                       </Pill>
                     ))}
+                    {(user.services ?? []).length === 0 && (
+                      <span style={{ color: "var(--admin-muted)", fontFamily: "DM Sans", fontSize: 13 }}>—</span>
+                    )}
                   </div>
                 </div>
               </div>
