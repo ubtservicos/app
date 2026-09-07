@@ -123,7 +123,6 @@ export default function AdminKycDetailPage() {
         return [
           { id: "cnh_a", label: "CNH categoria A ativa com observação EAR (Exerce Ativ. Remunerada)" },
           { id: "crlv_moto", label: "CRLV da motocicleta regularizado e licenciado" },
-          { id: "prontuario", label: "Prontuário de infrações da CNH limpo ou sem infrações gravíssimas" },
         ];
       case "Reciclagem":
         return [
@@ -224,14 +223,16 @@ export default function AdminKycDetailPage() {
     return defaultDocs;
   })();
 
-  const allChecked = checklistItems.every((item) => checkedItems[item.id] === true);
+  const hasMissingDocs = documents.some((doc) => doc.status === "missing");
+  const allChecked = !hasMissingDocs && checklistItems.every((item) => checkedItems[item.id] === true);
 
   const handleToggleCheck = (id: string) => {
+    if (hasMissingDocs) return;
     setCheckedItems((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
   const handleApprove = async () => {
-    if (!dbUser || !allChecked) return;
+    if (!dbUser || !allChecked || hasMissingDocs) return;
     try {
       // 1. Update usuarios
       await supabase
@@ -568,45 +569,53 @@ export default function AdminKycDetailPage() {
       {/* Content Tab 2: Checklist */}
       {activeTab === "checklist" && (
         <Card style={{ padding: 24 }}>
-          <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: "0 0 16px" }}>
-            Requisitos de Validação - {category}
-          </h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <h2 style={{ fontFamily: "Syne", fontSize: 16, fontWeight: 700, color: "var(--admin-text)", margin: 0 }}>
+              Requisitos de Validação - {category}
+            </h2>
+            {hasMissingDocs && (
+              <span className="font-sans text-[12px] font-semibold text-rose-400 bg-rose-950/40 border border-rose-800/40 px-2.5 py-1 rounded-full flex items-center gap-1.5">
+                <AlertCircle size={13} /> Bloqueado por falta de documentos
+              </span>
+            )}
+          </div>
+
+          {hasMissingDocs && (
+            <div className="flex items-center gap-3 p-3.5 mb-4 rounded-xl bg-rose-950/30 border border-rose-800/40 text-rose-300">
+              <AlertCircle size={18} className="text-rose-400 shrink-0" />
+              <div className="font-sans text-[13px] leading-relaxed">
+                <strong className="font-semibold text-rose-200">Aprovação bloqueada:</strong> Documentos obrigatórios ausentes. Todos os documentos exigidos devem ser anexados antes de validar a checklist.
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {checklistItems.map((item) => (
               <label
                 key={item.id}
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 12,
-                  padding: "12px 14px",
-                  borderRadius: 10,
-                  border: "1px solid",
-                  borderColor: checkedItems[item.id] ? "rgba(13,184,126,0.15)" : "#E2E8F0",
-                  background: checkedItems[item.id] ? "rgba(13,184,126,0.02)" : "#fff",
-                  cursor: "pointer",
-                  transition: "background 150ms, border-color 150ms"
-                }}
+                className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all ${
+                  hasMissingDocs
+                    ? "opacity-50 cursor-not-allowed bg-zinc-900/60 border-zinc-800 text-zinc-500"
+                    : checkedItems[item.id]
+                    ? "cursor-pointer bg-emerald-950/20 border-emerald-500/30 text-emerald-200"
+                    : "cursor-pointer bg-zinc-800/80 hover:bg-zinc-800 border-zinc-700 text-zinc-200"
+                }`}
               >
                 <input
                   type="checkbox"
-                  checked={!!checkedItems[item.id]}
+                  disabled={hasMissingDocs}
+                  checked={!hasMissingDocs && !!checkedItems[item.id]}
                   onChange={() => handleToggleCheck(item.id)}
-                  style={{
-                    marginTop: 3,
-                    width: 16,
-                    height: 16,
-                    accentColor: "#0DB87E",
-                    cursor: "pointer"
-                  }}
+                  className="mt-0.5 w-4 h-4 rounded border-zinc-600 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-zinc-900 bg-zinc-700 disabled:cursor-not-allowed"
                 />
-                <div style={{ display: "flex", flexDirection: "column" }}>
-                  <span style={{
-                    fontFamily: "DM Sans",
-                    fontSize: 14,
-                    fontWeight: 500,
-                    color: checkedItems[item.id] ? "var(--admin-text)" : "var(--admin-subtle)",
-                  }}>
+                <div className="flex flex-col">
+                  <span className={`font-sans text-[14px] font-medium leading-tight ${
+                    hasMissingDocs
+                      ? "text-zinc-500"
+                      : checkedItems[item.id]
+                      ? "text-zinc-100"
+                      : "text-zinc-300"
+                  }`}>
                     {item.label}
                   </span>
                 </div>
@@ -640,19 +649,23 @@ export default function AdminKycDetailPage() {
         </button>
 
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          {!allChecked && (
+          {hasMissingDocs ? (
+            <span style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: "DM Sans", fontSize: 13, color: "#E84040", fontWeight: 600 }}>
+              <AlertCircle size={16} /> Aprovação bloqueada: Documentos obrigatórios ausentes.
+            </span>
+          ) : !allChecked ? (
             <span style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: "DM Sans", fontSize: 13, color: "#F5A623" }}>
               <AlertCircle size={15} /> Marque todos os requisitos da checklist para habilitar aprovação.
             </span>
-          )}
+          ) : null}
           <PrimaryButton
             onClick={handleApprove}
-            disabled={!allChecked}
+            disabled={!allChecked || hasMissingDocs}
             style={{
               height: 44,
               padding: "0 28px",
-              opacity: allChecked ? 1 : 0.5,
-              cursor: allChecked ? "pointer" : "not-allowed",
+              opacity: allChecked && !hasMissingDocs ? 1 : 0.5,
+              cursor: allChecked && !hasMissingDocs ? "pointer" : "not-allowed",
             }}
           >
             Aprovar KYC e Credenciar
