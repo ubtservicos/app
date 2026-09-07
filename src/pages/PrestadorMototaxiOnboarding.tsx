@@ -215,7 +215,7 @@ const PrestadorMototaxiOnboarding = () => {
 
         // 3. Persist to prestador_mototaxi table with storage URLs
         const genderMapped = sex === "F" ? "feminino" : "masculino";
-        await supabase.from("prestador_mototaxi").upsert({
+        const { error: upsertErr } = await supabase.from("prestador_mototaxi").upsert({
           user_id: user.id,
           cpf: cpf,
           plate: plate,
@@ -231,6 +231,11 @@ const PrestadorMototaxiOnboarding = () => {
           selfie_url: selfieUrl,
           updated_at: new Date().toISOString()
         }, { onConflict: "user_id" });
+
+        if (upsertErr) {
+          console.error("Erro no upsert de prestador_mototaxi:", upsertErr);
+          throw upsertErr;
+        }
 
         // 4. Mark under_review in usuarios
         await supabase.from("usuarios").update({

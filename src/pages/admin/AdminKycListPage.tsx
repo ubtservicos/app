@@ -15,67 +15,51 @@ export default function AdminKycListPage() {
   const fetchPendingKycs = async () => {
     setLoading(true);
     try {
-      // 1. Fetch pending mototaxi records
-      const { data: motoPendentes } = await supabase
+      // 1. Fetch pending mototaxi records directly from SSOT
+      const { data: motoPendentes, error: errMoto } = await supabase
         .from("prestador_mototaxi")
         .select("*")
-        .eq("kyc_status", "pending");
+        .eq("kyc_status", "pending")
+        .order("created_at", { ascending: false });
 
-      const motoPendingUserIds = new Set(motoPendentes?.map(m => m.user_id) || []);
+      if (errMoto) {
+        console.error("Erro ao buscar prestador_mototaxi:", errMoto);
+      }
 
-      // 2. Fetch usuarios
-      const { data: dbUsers, error } = await supabase
-        .from("usuarios")
-        .select("*");
-      if (error) throw error;
-
-      // 3. Fetch profiles
+      // 2. Fetch profiles for candidate information
       const { data: dbProfiles } = await supabase
         .from("profiles")
-        .select("id, name, phone, role, is_active");
-      const profilesMap = new Map((dbProfiles || []).map(p => [p.id, p]));
+        .select("id, name, phone, role, is_active, created_at");
+      const profilesMap = new Map((dbProfiles || []).map((p) => [p.id, p]));
 
-      // 4. Fetch additional categories
-      const { data: diaristas } = await supabase
-        .from("diarista_perfis")
-        .select("user_id");
-      const diaristasSet = new Set(diaristas?.map(d => d.user_id) || []);
+      // 3. Fetch usuarios for candidate data
+      const { data: dbUsers } = await supabase
+        .from("usuarios")
+        .select("id, nome, role, status, created_at");
+      const usuariosMap = new Map((dbUsers || []).map((u) => [u.id, u]));
 
-      const { data: caminhoes } = await supabase
-        .from("coco_caminhoes")
-        .select("prestador_id");
-      const caminhoesSet = new Set(caminhoes?.map(c => c.prestador_id) || []);
+      // 4. Map Mototaxi candidates directly from prestador_mototaxi
+      const mappedMototaxi = (motoPendentes || []).map((moto: any) => {
+        const profile = profilesMap.get(moto.user_id);
+        const usuario = usuariosMap.get(moto.user_id);
+        const candidateName = usuario?.nome || profile?.name || "Candidato Mototaxi";
 
-      if (dbUsers) {
-        const mapped = dbUsers
-          .filter((u: any) => {
-            // Must be pending either in prestador_mototaxi, or explicitly marked under_review for diarista/reciclagem
-            return (
-              motoPendingUserIds.has(u.id) ||
-              (u.under_review === true && (diaristasSet.has(u.id) || caminhoesSet.has(u.id)))
-            );
-          })
-          .map((u: any) => {
-            const isColab = u.role === "cocoecia-colaborador" || u.role === "cocoecia-dirigentes" || u.role === "cocoecia";
-            const profile = profilesMap.get(u.id);
-            
-            let category = "Mototaxi";
-            if (isColab || caminhoesSet.has(u.id)) category = "Reciclagem";
-            else if (diaristasSet.has(u.id)) category = "Diarista";
+        return {
+          id: moto.user_id,
+          name: candidateName,
+          role: usuario?.role || profile?.role || "prestador",
+          email: profile?.phone
+            ? `Tel: ${profile.phone}`
+            : `${candidateName.toLowerCase().replace(/\s+/g, ".")}@ubt.app`,
+          createdAt: moto.created_at || moto.updated_at || profile?.created_at || new Date().toISOString(),
+          kycStatus: "pending",
+          category: "Mototaxi",
+          plate: moto.plate,
+          cpf: moto.cpf,
+        };
+      });
 
-            return {
-              id: u.id,
-              name: u.nome || profile?.name || "Prestador",
-              role: u.role,
-              email: u.telefone ? `Tel: ${u.telefone}` : `${(u.nome || "usuario").toLowerCase().replace(/\s+/g, ".")}@ubt.app`,
-              createdAt: u.created_at || new Date().toISOString(),
-              kycStatus: "pending",
-              category,
-            };
-          });
-
-        setUsers(mapped);
-      }
+      setUsers(mappedMototaxi);
     } catch (e) {
       console.error("Erro ao buscar KYCs pendentes:", e);
       toast.show("Erro ao carregar lista de KYCs.");
