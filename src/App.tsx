@@ -35,6 +35,7 @@ import Index from "./pages/Index.tsx";
 import ConceptExperience from "./pages/ConceptExperience.tsx";
 import Login from "./pages/Login.tsx";
 import Cadastro from "./pages/Cadastro.tsx";
+import OnboardingPage from "./pages/OnboardingPage.tsx";
 import RecuperarSenha from "./pages/RecuperarSenha.tsx";
 import AppHome from "./pages/AppHome.tsx";
 import MototaxiTomador from "./pages/MototaxiTomador.tsx";
@@ -147,6 +148,7 @@ const App = () => (
               <Route path="/experience" element={<ConceptExperience />} />
               <Route path="/login" element={<Login />} />
               <Route path="/cadastro" element={<Cadastro />} />
+              <Route path="/onboarding" element={<OnboardingPage />} />
               <Route path="/recuperar-senha" element={<RecuperarSenha />} />
               <Route path="/app/consentimento" element={<LgpdConsentPage />} />
 
