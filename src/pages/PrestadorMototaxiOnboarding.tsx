@@ -162,36 +162,51 @@ const PrestadorMototaxiOnboarding = () => {
 
   const submit = async () => {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
 
-    if (user) {
-      const currentStatus = user.user_metadata?.mototaxi_status || "kyc-pending";
-      const nextStatus = (currentStatus === "approved" || currentStatus === "kyc-pending") ? currentStatus : "kyc-pending";
+      if (user) {
+        // 1. Update Auth metadata
+        await supabase.auth.updateUser({
+          data: {
+            cpf: cpf,
+            sexo: sex,
+            placa_moto: plate,
+            modelo_moto: brandModel,
+            modalidade_moto: modalidade,
+            mototaxi_status: "kyc-pending",
+            has_crlv: !!crlvFile,
+            has_moto_photo: !!motoFile,
+            has_cnh_front: !!cnhFront,
+            has_cnh_back: !!cnhBack,
+            has_selfie: !!selfie,
+          }
+        });
 
-      await supabase.auth.updateUser({
-        data: {
+        // 2. Persist to prestador_mototaxi table
+        const genderMapped = sex === "F" ? "feminino" : "masculino";
+        await supabase.from("prestador_mototaxi").upsert({
+          user_id: user.id,
           cpf: cpf,
-          sexo: sex,
-          placa_moto: plate,
-          modelo_moto: brandModel,
-          modalidade_moto: modalidade,
-          mototaxi_status: nextStatus,
-          has_crlv: !!crlvFile,
-          has_moto_photo: !!motoFile,
-          has_cnh_front: !!cnhFront,
-          has_cnh_back: !!cnhBack,
-          has_selfie: !!selfie,
-        }
-      });
-    }
+          plate: plate,
+          gender: genderMapped,
+          modalidade: modalidade,
+          kyc_status: "pending",
+          is_online: false,
+          updated_at: new Date().toISOString()
+        }, { onConflict: "user_id" });
 
-    setLoading(false);
-    
-    // Redirect logically based on status
-    const finalStatus = user?.user_metadata?.mototaxi_status || "kyc-pending";
-    if (finalStatus === "approved" || finalStatus === "kyc-pending") {
-      navigate("/app/prestador/home");
-    } else {
+        // 3. Mark under_review in usuarios
+        await supabase.from("usuarios").update({
+          under_review: true
+        }).eq("id", user.id);
+      }
+
+      setLoading(false);
+      navigate("/app/prestador/mototaxi/kyc-pending");
+    } catch (err) {
+      console.error("Erro ao salvar onboarding mototaxi:", err);
+      setLoading(false);
       navigate("/app/prestador/mototaxi/kyc-pending");
     }
   };

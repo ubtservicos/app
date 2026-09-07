@@ -15,30 +15,46 @@ export default function AdminKycListPage() {
   const fetchPendingKycs = async () => {
     setLoading(true);
     try {
+      // 1. Fetch pending mototaxi records
+      const { data: motoPendentes } = await supabase
+        .from("prestador_mototaxi")
+        .select("*")
+        .eq("kyc_status", "pending");
+
+      const motoPendingUserIds = new Set(motoPendentes?.map(m => m.user_id) || []);
+
+      // 2. Fetch usuarios
       const { data: dbUsers, error } = await supabase
         .from("usuarios")
         .select("*");
       if (error) throw error;
 
+      // 3. Fetch profiles
+      const { data: dbProfiles } = await supabase
+        .from("profiles")
+        .select("id, name, phone, role, is_active");
+      const profilesMap = new Map((dbProfiles || []).map(p => [p.id, p]));
+
+      // 4. Fetch additional categories
+      const { data: diaristas } = await supabase
+        .from("diarista_perfis")
+        .select("user_id");
+      const diaristasSet = new Set(diaristas?.map(d => d.user_id) || []);
+
+      const { data: caminhoes } = await supabase
+        .from("coco_caminhoes")
+        .select("prestador_id");
+      const caminhoesSet = new Set(caminhoes?.map(c => c.prestador_id) || []);
+
       if (dbUsers) {
-        // Buscar perfis diaristas/caminhões para ajudar a definir categorias
-        const { data: diaristas } = await supabase
-          .from("diarista_perfis")
-          .select("user_id");
-        
-        const diaristasSet = new Set(diaristas?.map(d => d.user_id) || []);
-
-        const { data: caminhoes } = await supabase
-          .from("coco_caminhoes")
-          .select("prestador_id");
-        
-        const caminhoesSet = new Set(caminhoes?.map(c => c.prestador_id) || []);
-
-        // Filtrar apenas pendentes de KYC (role !== prestador e sem aprovação implícita)
         const mapped = dbUsers
+          .filter((u: any) => {
+            // Must be pending either in prestador_mototaxi, under_review, or status pending
+            return motoPendingUserIds.has(u.id) || u.under_review === true || u.status === "pending";
+          })
           .map((u: any) => {
             const isColab = u.role === "cocoecia-colaborador" || u.role === "cocoecia-dirigentes" || u.role === "cocoecia";
-            const kycStatus = u.role === "prestador" || isColab ? "approved" : "pending";
+            const profile = profilesMap.get(u.id);
             
             let category = "Mototaxi";
             if (isColab || caminhoesSet.has(u.id)) category = "Reciclagem";
@@ -46,15 +62,14 @@ export default function AdminKycListPage() {
 
             return {
               id: u.id,
-              name: u.nome,
+              name: u.nome || profile?.name || "Prestador",
               role: u.role,
-              email: `${u.nome.toLowerCase().replace(/\s+/g, ".")}@example.com`,
+              email: u.telefone ? `Tel: ${u.telefone}` : `${(u.nome || "usuario").toLowerCase().replace(/\s+/g, ".")}@ubt.app`,
               createdAt: u.created_at || new Date().toISOString(),
-              kycStatus,
+              kycStatus: "pending",
               category,
             };
-          })
-          .filter((u) => u.kycStatus === "pending");
+          });
 
         setUsers(mapped);
       }
@@ -72,16 +87,58 @@ export default function AdminKycListPage() {
 
   const setKyc = async (id: string, status: "approved" | "rejected") => {
     try {
-      const newRole = status === "approved" ? "prestador" : "tomador";
-      const { error } = await supabase
-        .from("usuarios")
-        .update({ role: newRole })
-        .eq("id", id);
+      if (status === "approved") {
+        // 1. Update usuarios table to active prestador
+        await supabase
+          .from("usuarios")
+          .update({
+            role: "prestador",
+            status: "active",
+            under_review: false,
+          })
+          .eq("id", id);
 
-      if (error) throw error;
+        // 2. Update prestador_mototaxi table to approved
+        await supabase
+          .from("prestador_mototaxi")
+          .update({
+            kyc_status: "approved",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("user_id", id);
+
+        // 3. Update profiles table if exists
+        await supabase
+          .from("profiles")
+          .update({
+            role: "prestador",
+            is_active: true,
+          })
+          .eq("id", id);
+
+        toast.show("KYC aprovado com sucesso! Prestador credenciado e ativo.");
+      } else {
+        // 1. Update usuarios
+        await supabase
+          .from("usuarios")
+          .update({
+            under_review: false,
+          })
+          .eq("id", id);
+
+        // 2. Update prestador_mototaxi
+        await supabase
+          .from("prestador_mototaxi")
+          .update({
+            kyc_status: "rejected",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("user_id", id);
+
+        toast.show("KYC reprovado.");
+      }
 
       setUsers((prev) => prev.filter((u) => u.id !== id));
-      toast.show(status === "approved" ? "KYC aprovado! Papel atualizado para Prestador." : "KYC reprovado.");
     } catch (e) {
       console.error("Erro ao atualizar KYC:", e);
       toast.show("Erro ao atualizar status do KYC.");

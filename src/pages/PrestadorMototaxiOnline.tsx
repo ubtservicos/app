@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { MapPin, Navigation, Bike, Package, ArrowLeft, Settings } from "lucide-react";
+import { MapPin, Navigation, Bike, Package, ArrowLeft, Settings, Clock, ShieldAlert } from "lucide-react";
 import PrestadorMapLight from "@/components/prestador/PrestadorMapLight";
 import GhostButtonLight from "@/components/prestador/GhostButtonLight";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -187,13 +187,14 @@ const PrestadorMototaxiOnline = () => {
   const watchIdRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (user.uid && user.kycStatus !== "approved") {
+    if (!user.isLoading && user.uid && user.kycStatus === "none") {
       navigate("/app/prestador/mototaxi/onboarding");
     }
-  }, [user.uid, user.kycStatus, navigate]);
+  }, [user.isLoading, user.uid, user.kycStatus, navigate]);
 
-  // GPS watch
+  // GPS watch (only if approved)
   useEffect(() => {
+    if (user.kycStatus !== "approved") return;
     if (!navigator.geolocation) return;
     try {
       watchIdRef.current = navigator.geolocation.watchPosition(
@@ -207,7 +208,7 @@ const PrestadorMototaxiOnline = () => {
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
     };
-  }, []);
+  }, [user.kycStatus]);
 
   const activeSessionIdRef = useRef<string | null>(null);
 
@@ -413,8 +414,90 @@ const PrestadorMototaxiOnline = () => {
     }
   };
 
+  if (user.kycStatus === "pending" || user.status === "pending") {
+    return (
+      <div
+        className="min-h-[100svh] flex flex-col justify-between px-6 py-6 text-zinc-100"
+        style={{ background: "var(--prestador-bg)" }}
+      >
+        <header className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => navigate("/app/prestador/home")}
+            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-white/5 transition-colors"
+            style={{ color: "#FFFFFF" }}
+            aria-label="Voltar"
+          >
+            <ArrowLeft size={22} />
+          </button>
+          <span className="font-display text-[18px] font-bold text-white">
+            UBT.
+          </span>
+          <div className="w-10" />
+        </header>
+
+        <main className="flex-1 flex flex-col items-center justify-center text-center my-8">
+          <div
+            className="w-20 h-20 rounded-3xl flex items-center justify-center mb-6 shadow-xl"
+            style={{
+              background: "rgba(245,166,35,0.12)",
+              border: "1px solid rgba(245,166,35,0.28)",
+            }}
+          >
+            <Clock size={40} color="#F5A623" className="animate-pulse" />
+          </div>
+
+          <div
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-4 text-xs font-semibold uppercase tracking-wider"
+            style={{
+              background: "rgba(245,166,35,0.10)",
+              color: "#F5A623",
+              border: "1px solid rgba(245,166,35,0.20)",
+            }}
+          >
+            <ShieldAlert size={14} />
+            Documentação em Análise
+          </div>
+
+          <h1 className="font-display text-[22px] font-bold text-white mb-3 max-w-xs">
+            Cadastro em Análise
+          </h1>
+
+          <p
+            className="font-sans text-[14px] leading-relaxed max-w-sm mb-8"
+            style={{ color: "var(--prestador-subtle, #A1A1AA)" }}
+          >
+            Sua documentação está em análise. Nossa equipe está avaliando seu cadastro e você será notificado em breve.
+          </p>
+
+          <div className="w-full max-w-xs space-y-3">
+            <button
+              type="button"
+              onClick={() => navigate("/app/prestador/home")}
+              className="w-full min-h-[48px] rounded-2xl font-display font-semibold text-sm transition-all"
+              style={{
+                background: "var(--prestador-card)",
+                border: "1px solid var(--prestador-border)",
+                color: "#FFFFFF",
+              }}
+            >
+              Voltar para o Painel
+            </button>
+          </div>
+        </main>
+
+        <footer className="text-center text-xs pb-2 text-white/40">
+          UBT Mototáxi &bull; Fila de Análise e Credenciamento
+        </footer>
+      </div>
+    );
+  }
+
   return (
-    <div className="relative min-h-[100svh]" style={{ background: "var(--prestador-bg)" }}>
+    <div
+      className="relative min-h-[100svh] overflow-hidden select-none"
+      style={{ background: "var(--prestador-bg)" }}
+    >
       {/* Floating Header */}
       <div
         style={{

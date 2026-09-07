@@ -23,15 +23,21 @@ export const useCurrentUser = (): RealUser => {
       try {
         const { data: dbUser } = await supabase
           .from("usuarios")
-          .select("role, nome")
+          .select("role, nome, status, under_review")
           .eq("id", authUser.id)
+          .maybeSingle();
+
+        const { data: mototaxiData } = await supabase
+          .from("prestador_mototaxi")
+          .select("kyc_status, modalidade, plate, cpf, gender")
+          .eq("user_id", authUser.id)
           .maybeSingle();
 
         if (!active) return;
 
         // Read status map from localStorage
         const savedStatuses = localStorage.getItem("ubt_users_status");
-        let userStatus: string = "active";
+        let userStatus: string = dbUser?.status || "active";
         if (savedStatuses) {
           try {
             const parsed = JSON.parse(savedStatuses);
@@ -43,16 +49,30 @@ export const useCurrentUser = (): RealUser => {
           }
         }
 
+        // Accurately resolve KYC status
+        let resolvedKycStatus: "approved" | "pending" | "none" | "rejected" = "none";
+        if (mototaxiData?.kyc_status) {
+          resolvedKycStatus = mototaxiData.kyc_status as any;
+        } else if (authUser.user_metadata?.mototaxi_status) {
+          resolvedKycStatus = authUser.user_metadata.mototaxi_status === "kyc-pending"
+            ? "pending"
+            : authUser.user_metadata.mototaxi_status;
+        } else if (dbUser?.under_review || dbUser?.status === "pending") {
+          resolvedKycStatus = "pending";
+        } else if (dbUser?.role === "prestador") {
+          resolvedKycStatus = "approved";
+        }
+
         setUser({
           uid: authUser.id,
           name: dbUser?.nome || authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || "Usuário",
           email: authUser.email,
           role: authUser.email === "ubt.servicos@gmail.com" ? "admin" : ((dbUser?.role as RealUserRole) || "tomador"),
-          kycStatus: authUser.user_metadata?.mototaxi_status === "kyc-pending" ? "approved" : (authUser.user_metadata?.mototaxi_status || "none"),
-          modalidade: authUser.user_metadata?.modalidade_moto,
-          plate: authUser.user_metadata?.placa_moto,
-          cpf: authUser.user_metadata?.cpf,
-          sexo: authUser.user_metadata?.sexo,
+          kycStatus: resolvedKycStatus,
+          modalidade: mototaxiData?.modalidade || authUser.user_metadata?.modalidade_moto,
+          plate: mototaxiData?.plate || authUser.user_metadata?.placa_moto,
+          cpf: mototaxiData?.cpf || authUser.user_metadata?.cpf,
+          sexo: mototaxiData?.gender || authUser.user_metadata?.sexo,
           status: userStatus,
           mototaxiActive: authUser.user_metadata?.mototaxi_active !== false,
           isLoading: false, // Carregamento concluído com sucesso

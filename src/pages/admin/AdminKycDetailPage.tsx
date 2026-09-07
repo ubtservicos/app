@@ -196,16 +196,36 @@ export default function AdminKycDetailPage() {
   const handleApprove = async () => {
     if (!dbUser || !allChecked) return;
     try {
-      const newRole = "prestador";
-      const { error } = await supabase
+      // 1. Update usuarios
+      await supabase
         .from("usuarios")
-        .update({ role: newRole })
+        .update({
+          role: "prestador",
+          status: "active",
+          under_review: false,
+        })
         .eq("id", dbUser.id);
 
-      if (error) throw error;
+      // 2. Update prestador_mototaxi
+      await supabase
+        .from("prestador_mototaxi")
+        .update({
+          kyc_status: "approved",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", dbUser.id);
 
-      toast.show("KYC Aprovado com sucesso! Usuário promovido a Prestador.");
-      navigate("/admin");
+      // 3. Update profiles
+      await supabase
+        .from("profiles")
+        .update({
+          role: "prestador",
+          is_active: true,
+        })
+        .eq("id", dbUser.id);
+
+      toast.show("KYC Aprovado com sucesso! Prestador credenciado e ativo.");
+      navigate("/admin/kyc-pendentes");
     } catch (e) {
       console.error("Erro ao aprovar KYC:", e);
       toast.show("Erro ao aprovar o KYC.");
@@ -215,17 +235,27 @@ export default function AdminKycDetailPage() {
   const handleReject = async () => {
     if (!dbUser) return;
     try {
-      const newRole = "tomador";
-      const { error } = await supabase
+      // 1. Update usuarios
+      await supabase
         .from("usuarios")
-        .update({ role: newRole })
+        .update({
+          under_review: false,
+        })
         .eq("id", dbUser.id);
 
-      if (error) throw error;
+      // 2. Update prestador_mototaxi
+      await supabase
+        .from("prestador_mototaxi")
+        .update({
+          kyc_status: "rejected",
+          kyc_notes: rejectReason || "Dados incoerentes",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", dbUser.id);
 
-      toast.show(`KYC Reprovado. Motivo enviado: ${rejectReason || "Dados incoerentes"}`);
+      toast.show(`KYC Reprovado. Motivo registrado: ${rejectReason || "Dados incoerentes"}`);
       setShowRejectModal(false);
-      navigate("/admin");
+      navigate("/admin/kyc-pendentes");
     } catch (e) {
       console.error("Erro ao reprovar KYC:", e);
       toast.show("Erro ao registrar reprovação do KYC.");
