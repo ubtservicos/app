@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/accordion";
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
+import { maskCPF } from "@/utils/masks";
 
 export interface WaitlistItem {
   id: string;
@@ -776,29 +777,34 @@ export default function AdminWaitlistPage() {
                 <div style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>{selectedLeadModal.nome}</div>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+              {/* Grid 2 colunas com distribuição exata */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                {/* Linha 1: CPF | E-mail */}
                 <div>
                   <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>CPF</span>
-                  <div style={{ fontSize: 14, color: "var(--admin-subtle)" }}>{selectedLeadModal.cpf || "—"}</div>
+                  <div style={{ fontSize: 14, color: "var(--admin-subtle)", fontWeight: 500 }}>
+                    {selectedLeadModal.cpf ? maskCPF(selectedLeadModal.cpf) : "—"}
+                  </div>
                 </div>
                 <div>
                   <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>E-mail</span>
                   <div style={{ fontSize: 14, color: "var(--admin-subtle)" }}>{selectedLeadModal.email}</div>
                 </div>
+
+                {/* Linha 2: Telefone | Cidade */}
                 <div>
                   <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Telefone</span>
                   <div style={{ fontSize: 14, color: "var(--admin-subtle)" }}>{selectedLeadModal.telefone}</div>
                 </div>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div>
                   <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Cidade</span>
                   <div style={{ fontSize: 14, color: "var(--admin-subtle)" }}>{selectedLeadModal.cidade}</div>
                 </div>
+
+                {/* Linha 3: Perfil Selecionado | Possui Conta Mercado Pago? */}
                 <div>
                   <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Perfil Selecionado</span>
-                  <div style={{ fontSize: 14, color: "var(--admin-subtle)", display: "flex", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
+                  <div style={{ fontSize: 14, color: "var(--admin-subtle)", display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
                     {(() => {
                       const perfilArr = Array.isArray(selectedLeadModal.perfil) ? selectedLeadModal.perfil : [selectedLeadModal.perfil];
                       return (
@@ -816,18 +822,17 @@ export default function AdminWaitlistPage() {
                     })()}
                   </div>
                 </div>
-              </div>
-
-              <div>
-                <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Possui Conta Mercado Pago?</span>
-                <div style={{ marginTop: 4 }}>
-                  {selectedLeadModal.observacoes?.includes("Mercado Pago: Sim") || (selectedLeadModal as any).possui_conta_mercado_pago === true ? (
-                    <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E">Sim</Pill>
-                  ) : selectedLeadModal.observacoes?.includes("Mercado Pago: Não") || (selectedLeadModal as any).possui_conta_mercado_pago === false ? (
-                    <Pill bg="rgba(239,68,68,0.08)" color="#EF4444">Não</Pill>
-                  ) : (
-                    <span style={{ fontSize: 13, color: "var(--admin-subtle)", fontStyle: "italic" }}>Não informado</span>
-                  )}
+                <div>
+                  <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>Possui Conta Mercado Pago?</span>
+                  <div style={{ marginTop: 4 }}>
+                    {selectedLeadModal.observacoes?.includes("Mercado Pago: Sim") || (selectedLeadModal as any).possui_conta_mercado_pago === true ? (
+                      <Pill bg="rgba(13,184,126,0.08)" color="#0DB87E">Sim</Pill>
+                    ) : selectedLeadModal.observacoes?.includes("Mercado Pago: Não") || (selectedLeadModal as any).possui_conta_mercado_pago === false ? (
+                      <Pill bg="rgba(239,68,68,0.08)" color="#EF4444">Não</Pill>
+                    ) : (
+                      <span style={{ fontSize: 13, color: "var(--admin-subtle)", fontStyle: "italic" }}>Não informado</span>
+                    )}
+                  </div>
                 </div>
               </div>
 

@@ -16,6 +16,7 @@ import { Card, Avatar, Pill, KYC_PILL, GhostButton, PrimaryButton } from "@/comp
 import { useAdminToast } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
 import { getStatusRules, STATUS_THEMES, StatusRule } from "@/lib/statusRules";
+import { maskCPF } from "@/utils/masks";
 
 interface OrderItem {
   id: string;
@@ -31,6 +32,7 @@ interface DetailUser {
   id: string;
   name: string;
   role: "tomador" | "prestador" | string;
+  cpf?: string;
   email: string;
   phone: string;
   createdAt: string;
@@ -249,11 +251,14 @@ export default function AdminClienteDetailPage() {
     const name = dbUser.nome || dbProfile?.name || "Sem nome";
     const email = dbProfile?.email || dbUser.email || "Não informado";
     const phone = dbProfile?.phone || dbUser.phone || "Não cadastrado";
+    const rawCpf = dbProfile?.cpf || dbUser?.cpf || null;
+    const cpf = rawCpf ? maskCPF(rawCpf) : "Não informado";
 
     const detailUser: DetailUser = {
       id: dbUser.id,
       name,
       role: (dbUser.role && (dbUser.role.startsWith("cocoecia") || dbUser.role === "prestador")) || services.length > 0 ? "prestador" : "tomador",
+      cpf,
       email,
       phone,
       createdAt: dbUser.created_at || dbProfile?.created_at || new Date().toISOString(),
@@ -498,6 +503,13 @@ export default function AdminClienteDetailPage() {
               Dados do Usuário
             </h2>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <CreditCard size={16} color="var(--admin-muted)" />
+                <div>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>CPF</div>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", fontWeight: 600, marginTop: 1 }}>{user.cpf || "Não informado"}</div>
+                </div>
+              </div>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <Mail size={16} color="var(--admin-muted)" />
                 <div>
