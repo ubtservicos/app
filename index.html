@@ -16,13 +16,17 @@
     <meta name="twitter:card" content="summary_large_image" />
 
     <link rel="icon" type="image/png" href="/favicon.png" />
-    <link rel="manifest" href="/manifest.json" />
+    <link rel="manifest" href="/manifest.json?v=20260908" />
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(err => {
-            console.error('ServiceWorker registration failed: ', err);
-          });
+          navigator.serviceWorker.register('/sw.js?v=20260908', { updateViaCache: 'none' })
+            .then(reg => {
+              try { reg.update(); } catch (e) {}
+            })
+            .catch(err => {
+              console.error('ServiceWorker registration failed: ', err);
+            });
         });
       }
     </script>

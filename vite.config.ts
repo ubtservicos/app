@@ -41,8 +41,9 @@ function dynamicManifestPlugin(mode: string) {
     name: "dynamic-pwa-manifest",
     configureServer(server: any) {
       server.middlewares.use((req: any, res: any, next: any) => {
-        if (req.url === "/manifest.json") {
+        if (req.url && req.url.startsWith("/manifest.json")) {
           res.setHeader("Content-Type", "application/json");
+          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
           res.end(JSON.stringify(manifestData, null, 2));
           return;
         }
