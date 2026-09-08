@@ -806,6 +806,9 @@ export default function Index() {
       const obsText = obsParts.join(" | ");
 
       const cleanCpf = values.cpf ? values.cpf.replace(/\D/g, "") : null;
+      const perfilArray = Array.isArray(values.perfil)
+        ? values.perfil.filter(Boolean)
+        : (values.perfil ? [String(values.perfil)] : ["morador"]);
 
       // 2. Montar Payload estrito alinhado com a tabela public.waitlist
       const payload = {
@@ -814,7 +817,7 @@ export default function Index() {
         email: values.email.trim().toLowerCase(),
         telefone: values.telefone.trim(),
         cidade: "Ubatuba",
-        perfil: [values.perfil], // PostgreSQL ARRAY text[]
+        perfil: perfilArray, // PostgreSQL ARRAY text[]
         consentimento_lgpd: true,
         status: "novo",
         created_at_local: createdLocal,

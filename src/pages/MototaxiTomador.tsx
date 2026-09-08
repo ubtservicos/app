@@ -112,8 +112,22 @@ const IdleSheet = ({
   }, [destQuery, destination]);
 
   const handleSelectDest = (r: { label: string; lat: number; lng: number }) => {
-    setDestination({ lat: r.lat, lng: r.lng, address: r.label });
-    setDestQuery(r.label);
+    const userNumberMatch = destQuery.match(/(?:,\s*|n[º°]?\s*|\s+)(\d+[a-zA-Z]?)(?:\b|$)/i) || destQuery.match(/(\d+)/);
+    const userTypedNumber = userNumberMatch ? userNumberMatch[1] : null;
+
+    let finalAddress = r.label;
+    if (userTypedNumber && !r.label.match(new RegExp(`\\b${userTypedNumber}\\b`))) {
+      const parts = r.label.split(',');
+      if (parts.length > 1) {
+        parts[0] = `${parts[0].trim()}, ${userTypedNumber}`;
+        finalAddress = parts.join(', ');
+      } else {
+        finalAddress = `${r.label}, ${userTypedNumber}`;
+      }
+    }
+
+    setDestination({ lat: r.lat, lng: r.lng, address: finalAddress });
+    setDestQuery(finalAddress);
     setDestResults([]);
   };
 

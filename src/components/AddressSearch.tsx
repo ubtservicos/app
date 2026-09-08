@@ -49,6 +49,25 @@ export function AddressSearch({ value, onChange, placeholder = 'Digite o endere√
         boxShadow: '0 8px 24px rgba(0,0,0,0.20)',
     };
 
+    const handleSelectSuggestion = (s: { label: string; lat: number; lng: number }) => {
+        const userNumberMatch = value.match(/(?:,\s*|n[¬∫¬∞]?\s*|\s+)(\d+[a-zA-Z]?)(?:\b|$)/i) || value.match(/(\d+)/);
+        const userTypedNumber = userNumberMatch ? userNumberMatch[1] : null;
+
+        let finalAddress = s.label;
+        if (userTypedNumber && !s.label.match(new RegExp(`\\b${userTypedNumber}\\b`))) {
+            const parts = s.label.split(',');
+            if (parts.length > 1) {
+                parts[0] = `${parts[0].trim()}, ${userTypedNumber}`;
+                finalAddress = parts.join(', ');
+            } else {
+                finalAddress = `${s.label}, ${userTypedNumber}`;
+            }
+        }
+
+        onChange(finalAddress, { lat: s.lat, lng: s.lng });
+        setOpen(false);
+    };
+
     return (
         <div style={{ position: 'relative' }}>
             <div style={containerStyle}>
@@ -68,7 +87,7 @@ export function AddressSearch({ value, onChange, placeholder = 'Digite o endere√
             {open && (
                 <div style={dropdownStyle}>
                     {suggestions.map((s, i) => (
-                        <div key={i} onClick={() => { onChange(s.label, { lat: s.lat, lng: s.lng }); setOpen(false); }}
+                        <div key={i} onClick={() => handleSelectSuggestion(s)}
                             style={{
                                 padding: '12px 16px', cursor: 'pointer', borderBottom: i < suggestions.length - 1 ? `1px solid ${dark ? 'rgba(255,255,255,0.07)' : '#EFF0F3'}` : 'none',
                                 display: 'flex', gap: 10, alignItems: 'flex-start'

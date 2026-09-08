@@ -344,6 +344,7 @@ const PrestadorMototaxiOnline = () => {
 
   // Realtime subscription with auto-reconnect (replaces raw .subscribe())
   const handleNewCorrida = useCallback((payload: any) => {
+    console.log('Evento Realtime Recebido:', payload);
     if (payload.new) {
       const c = payload.new;
       if (c.status === 'searching' && !c.prestador_id) {
@@ -369,10 +370,11 @@ const PrestadorMototaxiOnline = () => {
   }, []);
 
   useRealtimeChannel(
-    'public:mototaxi_corridas',
-    { event: '*', table: 'mototaxi_corridas' },
+    'public:mototaxi_corridas_insert',
+    { event: 'INSERT', table: 'mototaxi_corridas' },
     handleNewCorrida,
     (status) => {
+      console.log('Status do Canal Realtime (mototaxi_corridas):', status);
       if (status === 'reconnecting') toast.info('Reconectando ao servidor...');
       if (status === 'error') toast.error('Conexão perdida. Atualize a página.');
     }

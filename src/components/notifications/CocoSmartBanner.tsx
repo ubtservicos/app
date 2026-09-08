@@ -19,33 +19,49 @@ const DIAS_MAP: Record<number, string> = {
   6: "Sábado",
 };
 
+const normalizeBairro = (str?: string | null) => {
+  if (!str) return "";
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\bii\b/g, "2")
+    .replace(/\biii\b/g, "3")
+    .replace(/\biv\b/g, "4")
+    .replace(/[^a-z0-9]/g, "")
+    .trim();
+};
+
 export default function CocoSmartBanner({ currentAddress, onCtaClick }: CocoSmartBannerProps) {
   const user = useCurrentUser();
   const navigate = useNavigate();
-  const [scheduleTomorrow, setScheduleTomorrow] = useState<{
+  const [schedule, setSchedule] = useState<{
     bairro_nome: string;
     dia_semana: string;
     horario_inicio: string;
     horario_fim: string;
+    badgeLabel: string;
+    title: string;
   } | null>(null);
   const [isDismissed, setIsDismissed] = useState(false);
 
   useEffect(() => {
     const checkSchedule = async () => {
       try {
-        const tomorrowIndex = (new Date().getDay() + 1) % 7;
+        const todayIndex = new Date().getDay();
+        const tomorrowIndex = (todayIndex + 1) % 7;
+        const todayName = DIAS_MAP[todayIndex];
         const tomorrowName = DIAS_MAP[tomorrowIndex];
 
-        // Fetch all active schedules for tomorrow
-        const { data, error } = await supabase
+        // 1. Buscar todas as escalas ativas de coleta
+        const { data: allSchedules, error } = await supabase
           .from("coco_agenda_bairros")
           .select("*")
-          .eq("dia_semana", tomorrowName)
           .eq("is_active", true);
 
-        if (error || !data || data.length === 0) return;
+        if (error || !allSchedules || allSchedules.length === 0) return;
 
-        // Determine user neighborhood prioritizing bairro_moradia from profiles
+        // 2. Determinar bairro do usuário priorizando profiles e usuarios
         let userBairro = "";
         if (user.uid) {
           try {
@@ -59,7 +75,9 @@ export default function CocoSmartBanner({ currentAddress, onCtaClick }: CocoSmar
               userBairro = profData.bairro_moradia;
             } else if (profData?.bairro_trabalho) {
               userBairro = profData.bairro_trabalho;
-            } else {
+            }
+
+            if (!userBairro) {
               const { data: userData } = await supabase
                 .from("usuarios")
                 .select("bairro_moradia, bairro_trabalho")
@@ -67,6 +85,8 @@ export default function CocoSmartBanner({ currentAddress, onCtaClick }: CocoSmar
                 .maybeSingle();
               if (userData?.bairro_moradia) {
                 userBairro = userData.bairro_moradia;
+              } else if (userData?.bairro_trabalho) {
+                userBairro = userData.bairro_trabalho;
               }
             }
           } catch (profileErr) {
@@ -78,28 +98,39 @@ export default function CocoSmartBanner({ currentAddress, onCtaClick }: CocoSmar
           userBairro = currentAddress;
         }
 
-        if (!userBairro) {
-          setScheduleTomorrow(data[0]);
-          return;
-        }
+        const normalizedUser = normalizeBairro(userBairro);
 
-        const cleanUserBairro = userBairro
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .toLowerCase();
-
-        const matched = data.find((item) => {
-          const cleanItemBairro = item.bairro_nome
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .toLowerCase();
-          return cleanUserBairro.includes(cleanItemBairro) || cleanItemBairro.includes(cleanUserBairro);
+        // 3. Procurar match do bairro do usuário na agenda
+        let matchedItem = allSchedules.find((item) => {
+          const normItem = normalizeBairro(item.bairro_nome);
+          return (
+            normItem === normalizedUser ||
+            normItem.includes(normalizedUser) ||
+            (normalizedUser.length >= 3 && normalizedUser.includes(normItem))
+          );
         });
 
-        if (matched) {
-          setScheduleTomorrow(matched);
-        } else if (data.length > 0) {
-          setScheduleTomorrow(data[0]);
+        // 4. Se não houver match direto pelo bairro do usuário, buscar escalas de amanhã ou de hoje
+        if (!matchedItem) {
+          matchedItem = allSchedules.find((item) => item.dia_semana === tomorrowName) ||
+                        allSchedules.find((item) => item.dia_semana === todayName) ||
+                        allSchedules[0];
+        }
+
+        if (matchedItem) {
+          const isToday = matchedItem.dia_semana === todayName;
+          const isTomorrow = matchedItem.dia_semana === tomorrowName;
+          const badgeLabel = isToday ? "Coleta Hoje" : isTomorrow ? "Coleta Amanhã" : `Coleta ${matchedItem.dia_semana}`;
+          const titleTime = isToday ? "passa no seu bairro hoje" : isTomorrow ? "passa amanhã" : `passa toda ${matchedItem.dia_semana}`;
+
+          setSchedule({
+            bairro_nome: matchedItem.bairro_nome,
+            dia_semana: matchedItem.dia_semana,
+            horario_inicio: matchedItem.horario_inicio,
+            horario_fim: matchedItem.horario_fim,
+            badgeLabel,
+            title: `O caminhão da coleta ${titleTime} em ${matchedItem.bairro_nome}! ♻️`,
+          });
         }
       } catch (err) {
         console.warn("Erro ao consultar agenda inteligente da Côco & Cia:", err);
@@ -109,7 +140,7 @@ export default function CocoSmartBanner({ currentAddress, onCtaClick }: CocoSmar
     checkSchedule();
   }, [user.uid, currentAddress]);
 
-  if (!scheduleTomorrow || isDismissed) return null;
+  if (!schedule || isDismissed) return null;
 
   const handleAction = () => {
     if (onCtaClick) {
@@ -130,15 +161,15 @@ export default function CocoSmartBanner({ currentAddress, onCtaClick }: CocoSmar
         <div>
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#0DB87E]/20 text-[#0DB87E] text-[10px] font-mono font-bold uppercase tracking-wider">
-              <Calendar size={10} /> Coleta Amanhã
+              <Calendar size={10} /> {schedule.badgeLabel}
             </span>
             <span className="text-xs text-white/50 font-sans flex items-center gap-1">
-              <Clock size={11} /> {scheduleTomorrow.horario_inicio} às {scheduleTomorrow.horario_fim}
+              <Clock size={11} /> {schedule.horario_inicio} às {schedule.horario_fim}
             </span>
           </div>
 
           <h4 className="font-display font-bold text-sm sm:text-base text-white mt-1">
-            O caminhão da coleta passa em <strong>{scheduleTomorrow.bairro_nome}</strong> amanhã! ♻️
+            {schedule.title}
           </h4>
           <p className="text-xs text-white/70 font-sans mt-0.5">
             Separe seus plásticos, vidros, latinhas e óleos usados para o recolhimento.
