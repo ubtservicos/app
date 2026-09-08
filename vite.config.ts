@@ -5,9 +5,19 @@ import { componentTagger } from "lovable-tagger";
 
 // Dynamic PWA Manifest Plugin
 function dynamicManifestPlugin(mode: string) {
+  const isHomologExplicit = 
+    process.env.VITE_APP_ENV === "homolog" || 
+    process.env.VITE_APP_ENV === "homologacao" ||
+    process.env.VERCEL_URL?.includes("homolog") ||
+    process.env.VERCEL_GIT_COMMIT_REF?.includes("homolog");
+
   const isProd = 
-    process.env.VITE_APP_ENV === "production" || 
-    (process.env.VERCEL_ENV === "production" && !process.env.VERCEL_URL?.includes("homolog") && process.env.VITE_APP_ENV !== "homolog");
+    !isHomologExplicit && (
+      mode === "production" ||
+      process.env.NODE_ENV === "production" ||
+      process.env.VITE_APP_ENV === "production" ||
+      process.env.VERCEL_ENV === "production"
+    );
 
   const manifestData = {
     short_name: isProd ? "UBT" : "UBT Homolog",
