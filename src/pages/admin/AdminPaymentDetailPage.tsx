@@ -481,72 +481,72 @@ _UBT - O Superapp do Trabalhador_`;
       </div>
 
       {/* 1. DADOS DO SERVIÇO (Card ocupando largura total com 3 colunas internas) */}
-      <div className="w-full mb-6 print:hidden">
-        <Card className="w-full p-6 bg-zinc-900/90 border border-zinc-800 rounded-2xl shadow-lg">
-          <h3 className="font-display text-lg font-bold text-white mb-5 flex items-center gap-2 border-b border-zinc-800 pb-3">
-            <User size={18} className="text-emerald-400" /> Dados do Serviço & Participantes
+      <div className="w-full mb-6 print:mb-4">
+        <Card className="w-full p-6 bg-zinc-900/90 border border-zinc-800 rounded-2xl shadow-lg print:bg-white print:text-black print:border-black print:p-4">
+          <h3 className="font-display text-lg font-bold text-white print:text-black mb-5 flex items-center gap-2 border-b border-zinc-800 print:border-zinc-300 pb-3">
+            <User size={18} className="text-emerald-400 print:text-black" /> Dados do Serviço & Participantes
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
             {/* Coluna 1: Informações da Corrida / Serviço */}
-            <div className="space-y-3 bg-zinc-950/40 p-4 rounded-xl border border-zinc-800/60">
-              <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider block mb-2">
+            <div className="space-y-3 bg-zinc-950/40 p-4 rounded-xl border border-zinc-800/60 print:bg-zinc-50 print:border-zinc-300">
+              <span className="text-xs font-semibold text-emerald-400 print:text-black uppercase tracking-wider block mb-2">
                 Especificação do Serviço
               </span>
-              <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/60">
-                <span className="text-zinc-400">Modalidade:</span>
-                <span className="font-semibold text-white capitalize">{payment.service_type}</span>
+              <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/60 print:border-zinc-200">
+                <span className="text-zinc-400 print:text-zinc-600">Modalidade:</span>
+                <span className="font-semibold text-white print:text-black capitalize">{payment.service_type}</span>
               </div>
-              <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/60">
-                <span className="text-zinc-400">Tipo de Corrida:</span>
-                <span className="font-semibold text-zinc-200 capitalize">{service?.type || "Carona"}</span>
+              <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/60 print:border-zinc-200">
+                <span className="text-zinc-400 print:text-zinc-600">Tipo de Corrida:</span>
+                <span className="font-semibold text-zinc-200 print:text-black capitalize">{service?.type || "Carona"}</span>
               </div>
-              <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/60">
-                <span className="text-zinc-400">Distância Estimada:</span>
-                <span className="font-semibold text-zinc-200">{service?.distance_km ? `${service.distance_km} km` : "2.4 km"}</span>
+              <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/60 print:border-zinc-200">
+                <span className="text-zinc-400 print:text-zinc-600">Distância Estimada:</span>
+                <span className="font-semibold text-zinc-200 print:text-black">{service?.distance_km ? `${service.distance_km} km` : "2.4 km"}</span>
               </div>
               <div className="flex justify-between items-center py-1.5">
-                <span className="text-zinc-400">Tempo Estimado:</span>
-                <span className="font-semibold text-zinc-200">{service?.duration_min ? `${service.duration_min} min` : "7 min"}</span>
+                <span className="text-zinc-400 print:text-zinc-600">Tempo Estimado:</span>
+                <span className="font-semibold text-zinc-200 print:text-black">{service?.duration_min ? `${service.duration_min} min` : "7 min"}</span>
               </div>
             </div>
 
             {/* Coluna 2: Pessoas Envolvidas */}
-            <div className="space-y-3 bg-zinc-950/40 p-4 rounded-xl border border-zinc-800/60">
-              <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider block mb-2">
+            <div className="space-y-3 bg-zinc-950/40 p-4 rounded-xl border border-zinc-800/60 print:bg-zinc-50 print:border-zinc-300">
+              <span className="text-xs font-semibold text-emerald-400 print:text-black uppercase tracking-wider block mb-2">
                 Partes Envolvidas
               </span>
-              <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/60">
-                <span className="text-zinc-400">Tomador (Cliente):</span>
-                <span className="font-semibold text-zinc-200">{tomador?.name || "Felipe Santander"}</span>
+              <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/60 print:border-zinc-200">
+                <span className="text-zinc-400 print:text-zinc-600">Tomador (Cliente):</span>
+                <span className="font-semibold text-zinc-200 print:text-black">{tomador?.name || "Felipe Santander"}</span>
               </div>
-              <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/60">
-                <span className="text-zinc-400">Prestador (Motorista):</span>
-                <span className="font-semibold text-emerald-400">{prestador?.name || "Silvina Luz"}</span>
+              <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/60 print:border-zinc-200">
+                <span className="text-zinc-400 print:text-zinc-600">Prestador (Motorista):</span>
+                <span className="font-semibold text-emerald-400 print:text-black">{prestador?.name || "Silvina Luz"}</span>
               </div>
               <div className="flex justify-between items-center py-1.5">
-                <span className="text-zinc-400">Associação Vinculada:</span>
-                <span className="font-semibold text-zinc-300 text-right">{associationName}</span>
+                <span className="text-zinc-400 print:text-zinc-600">Associação Vinculada:</span>
+                <span className="font-semibold text-zinc-300 print:text-black text-right">{associationName}</span>
               </div>
             </div>
 
             {/* Coluna 3: Auditoria & Timestamps */}
-            <div className="space-y-3 bg-zinc-950/40 p-4 rounded-xl border border-zinc-800/60 flex flex-col justify-between">
+            <div className="space-y-3 bg-zinc-950/40 p-4 rounded-xl border border-zinc-800/60 print:bg-zinc-50 print:border-zinc-300 flex flex-col justify-between">
               <div>
-                <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider block mb-2">
+                <span className="text-xs font-semibold text-emerald-400 print:text-black uppercase tracking-wider block mb-2">
                   Registro & Liquidação
                 </span>
-                <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/60">
-                  <span className="text-zinc-400">Data de Criação:</span>
-                  <span className="text-zinc-300">{new Date(payment.created_at).toLocaleString("pt-BR")}</span>
+                <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/60 print:border-zinc-200">
+                  <span className="text-zinc-400 print:text-zinc-600">Data de Criação:</span>
+                  <span className="text-zinc-300 print:text-black">{new Date(payment.created_at).toLocaleString("pt-BR")}</span>
                 </div>
                 <div className="flex justify-between items-center py-1.5">
-                  <span className="text-zinc-400">Data de Liquidação:</span>
-                  <span className="text-zinc-300">{new Date(payment.updated_at).toLocaleString("pt-BR")}</span>
+                  <span className="text-zinc-400 print:text-zinc-600">Data de Liquidação:</span>
+                  <span className="text-zinc-300 print:text-black">{new Date(payment.updated_at).toLocaleString("pt-BR")}</span>
                 </div>
               </div>
-              <div className="p-2.5 bg-zinc-900/80 rounded-lg border border-zinc-800 text-[11px] text-zinc-400 flex items-center gap-2">
-                <ShieldCheck size={15} className="text-emerald-400 shrink-0" />
+              <div className="p-2.5 bg-zinc-900/80 print:bg-white rounded-lg border border-zinc-800 print:border-zinc-300 text-[11px] text-zinc-400 print:text-zinc-600 flex items-center gap-2">
+                <ShieldCheck size={15} className="text-emerald-400 print:text-black shrink-0" />
                 <span>Auditoria garantida em <code>financial_audit_logs</code>.</span>
               </div>
             </div>
@@ -555,18 +555,20 @@ _UBT - O Superapp do Trabalhador_`;
       </div>
 
       {/* 2. DISTRIBUIÇÃO DE SPLIT UBT (7 VIAS) (Card ocupando largura total w-full) */}
-      <div className="w-full mb-6 print:hidden">
-        <Card className="w-full p-6 bg-zinc-900/90 border border-zinc-800 rounded-2xl shadow-lg">
-          <div className="flex items-center justify-between mb-4">
+      <div className="w-full mb-6 print:mb-4">
+        <Card className="w-full p-6 bg-zinc-900/90 border border-zinc-800 rounded-2xl shadow-lg print:bg-white print:text-black print:border-black print:p-4">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-zinc-800 print:border-zinc-300">
             <div>
-              <h3 className="font-display text-lg font-bold text-white flex items-center gap-2">
-                <FileText size={18} className="text-emerald-400" /> Distribuição de Split UBT (7 Vias)
+              <h3 className="font-display text-lg font-bold text-white print:text-black flex items-center gap-2">
+                <FileText size={18} className="text-emerald-400 print:text-black" /> Distribuição de Split UBT (7 Vias)
               </h3>
-              <p className="text-xs text-zinc-400 mt-0.5">Divisão exata regulatória com fechamento contábil de 100%</p>
+              <p className="text-xs text-zinc-400 print:text-zinc-600 mt-0.5">Divisão exata regulatória com fechamento contábil de 100%</p>
             </div>
             <div className="text-right">
-              <span className="text-xs text-zinc-400">Soma das 7 vias:</span>
-              <span className="ml-2 font-bold text-emerald-400 text-base">{formatBR(totalSplitSum)}</span>
+              <span className="text-xs text-zinc-400 print:text-zinc-600 block">Código de Autenticação:</span>
+              <span className="font-mono text-sm font-bold text-emerald-400 print:text-black">
+                UBT-FIN-{payment.id.slice(0, 8).toUpperCase()}
+              </span>
             </div>
           </div>
 
@@ -633,74 +635,6 @@ _UBT - O Superapp do Trabalhador_`;
                 </tr>
               </tfoot>
             </table>
-          </div>
-        </Card>
-      </div>
-
-      {/* 3. COMPROVANTE DE TRANSAÇÃO & REPASSE (Card ocupando largura total w-full) */}
-      <div className="w-full">
-        <Card className="w-full p-6 md:p-8 bg-zinc-900/90 border border-zinc-800 rounded-2xl shadow-xl print-receipt-full print:border-black print:p-6 print:bg-white print:text-black">
-          <div className="flex items-center justify-between pb-6 border-b border-zinc-800 print:border-black">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-bold text-lg font-display">
-                UBT
-              </div>
-              <div>
-                <h4 className="font-display font-bold text-lg text-white print:text-black">Comprovante de Transação & Repasse</h4>
-                <p className="text-xs text-zinc-400 print:text-zinc-600">UBT - O Superapp do Trabalhador • Ubatuba / SP</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <span className="text-xs text-zinc-400 print:text-zinc-600">Código de Autenticação:</span>
-              <div className="font-mono text-sm font-bold text-emerald-400 print:text-black">UBT-FIN-{payment.id.slice(0, 8).toUpperCase()}</div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-6 border-b border-zinc-800 print:border-black text-sm">
-            <div>
-              <span className="text-xs text-zinc-400 print:text-zinc-600 block">Data/Hora:</span>
-              <span className="font-medium text-zinc-200 print:text-black">{new Date(payment.created_at).toLocaleString("pt-BR")}</span>
-            </div>
-            <div>
-              <span className="text-xs text-zinc-400 print:text-zinc-600 block">Tomador:</span>
-              <span className="font-medium text-zinc-200 print:text-black">{tomador?.name || "Felipe Santander"}</span>
-            </div>
-            <div>
-              <span className="text-xs text-zinc-400 print:text-zinc-600 block">Prestador:</span>
-              <span className="font-medium text-zinc-200 print:text-black">{prestador?.name || "Silvina Luz"}</span>
-            </div>
-            <div>
-              <span className="text-xs text-zinc-400 print:text-zinc-600 block">Valor Bruto:</span>
-              <span className="font-bold text-emerald-400 print:text-black text-base">{formatBR(payment.total_amount)}</span>
-            </div>
-          </div>
-
-          <div className="py-5">
-            <h5 className="text-xs font-semibold text-zinc-400 print:text-zinc-600 uppercase tracking-wider mb-3">
-              Detalhamento dos Repasses (7 Vias)
-            </h5>
-            <div className="space-y-2 text-xs text-zinc-300 print:text-zinc-900">
-              {splitRows.map((r) => (
-                <div key={r.index} className="flex justify-between items-center py-1.5 border-b border-zinc-800/40 print:border-zinc-300">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-zinc-400 print:text-zinc-600">{r.index}.</span>
-                    <span className="font-medium">{r.name}</span>
-                    <span className="text-zinc-400 print:text-zinc-600">({r.pct.toFixed(1)}%)</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono font-bold text-zinc-100 print:text-black">{formatBR(r.amount)}</span>
-                    <span className="print:inline-block hidden text-[10px] uppercase font-semibold text-zinc-600 border border-zinc-400 px-1.5 rounded">
-                      {r.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="pt-4 border-t-2 border-zinc-800 print:border-black flex flex-col md:flex-row items-center justify-between text-xs text-zinc-400 print:text-zinc-600 gap-2">
-            <span>Transação processada via Mercado Pago Sandbox e distribuída pela UBT Finance Engine.</span>
-            <span className="font-semibold text-emerald-400 print:text-black">TOTAL: {formatBR(payment.total_amount)} (100.0%) • 100% Auditado</span>
           </div>
         </Card>
       </div>

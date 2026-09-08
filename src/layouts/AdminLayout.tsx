@@ -32,7 +32,9 @@ import {
   MapPin,
   Calendar,
   Truck,
-  Send
+  Send,
+  Bike,
+  ShoppingBag
 } from "lucide-react";
 import { AdminToastProvider } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
@@ -58,6 +60,20 @@ export const COCO_NAV_ITEMS = [
   { icon: Truck, label: "Gestão de Frota", path: "/admin/coco/frota", roles: ALLOWED_COCO_ROLES },
   { icon: Users, label: "Colaboradores", path: "/admin/coco/colaboradores", roles: ALLOWED_COCO_ROLES },
   { icon: Settings, label: "Configurações", path: "/admin/coco/config", roles: ALLOWED_COCO_ROLES },
+];
+
+export const DIARISTAS_NAV_ITEMS = [
+  { icon: Sparkles, label: "Gestão & Materiais", path: "/admin/diaristas", roles: ["operator", "admin", "super_admin"] },
+];
+
+export const MOTOTAXI_NAV_ITEMS = [
+  { icon: Bike, label: "Painel & Corridas", path: "/app/prestador/mototaxi/online", roles: ["operator", "admin", "super_admin"] },
+  { icon: Clock, label: "KYC Mototaxistas", path: "/admin/kyc-pendentes", roles: ["operator", "admin", "super_admin"] },
+];
+
+export const AMBULANTES_NAV_ITEMS = [
+  { icon: ShoppingBag, label: "Catálogo de Produtos", path: "/app/ambulantes", roles: ["operator", "admin", "super_admin"] },
+  { icon: Users, label: "Gestão de Pedidos", path: "/app/prestador/ambulantes/online", roles: ["operator", "admin", "super_admin"] },
 ];
 
 export const NAV_ITEMS = [
@@ -95,7 +111,7 @@ export const NAV_ITEMS = [
 
 const sectionTitle = (path: string) => {
   if (path === "/admin") return "Dashboard";
-  const all = [...NAV_ITEMS, ...COCO_NAV_ITEMS];
+  const all = [...NAV_ITEMS, ...COCO_NAV_ITEMS, ...DIARISTAS_NAV_ITEMS, ...MOTOTAXI_NAV_ITEMS, ...AMBULANTES_NAV_ITEMS];
   return all.find((n) => n.path === path)?.label ?? "Painel";
 };
 
@@ -175,28 +191,38 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
 
   // Categorize filtered items
   const painelItems = filteredItems.filter(item => ["/admin", "/admin/operacoes", "/admin/health"].includes(item.path));
-  const operacoesItems = filteredItems.filter(item => ["/admin/clientes", "/admin/diaristas", "/admin/mensageria", "/app/admin/aprovacoes", "/admin/waitlist", "/admin/entidades", "/admin/conteudo"].includes(item.path));
+  const operacoesItems = filteredItems.filter(item => ["/admin/clientes", "/admin/kyc-pendentes", "/admin/mensageria", "/app/admin/aprovacoes", "/admin/waitlist", "/admin/entidades", "/admin/conteudo"].includes(item.path));
   const financeiroItems = filteredItems.filter(item => ["/admin/payments", "/admin/payouts", "/admin/refunds", "/admin/split", "/admin/preco", "/admin/financeiro", "/admin/sorteio/1-5", "/admin/sorteio/1-11"].includes(item.path));
-  const complianceItems = filteredItems.filter(item => ["/app/admin/documentos", "/admin/kyc-pendentes", "/admin/disputes", "/admin/arbitragem", "/admin/cancellations", "/admin/antifraude", "/admin/analytics"].includes(item.path));
+  const complianceItems = filteredItems.filter(item => ["/app/admin/documentos", "/admin/disputes", "/admin/arbitragem", "/admin/cancellations", "/admin/antifraude", "/admin/analytics"].includes(item.path));
   const sistemaItems = filteredItems.filter(item => ["/admin/configuracoes", "/admin/security", "/admin/lgpd", "/admin/auditoria", "/app/admin/wiki", "/admin/quality", "/admin/permissoes"].includes(item.path));
+
+  const diaristasItems = DIARISTAS_NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role));
+  const mototaxiItems = MOTOTAXI_NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role));
+  const ambulantesItems = AMBULANTES_NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role));
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {
-      coco: false,
       painel: false,
       operacoes: false,
       financeiro: false,
       compliance: false,
-      sistema: false
+      sistema: false,
+      diaristas: false,
+      mototaxi: false,
+      ambulantes: false,
+      coco: false
     };
     // Auto expand active section
-    if (cocoItems.some(item => pathname === item.path || pathname.startsWith("/admin/coco"))) initial.coco = true;
-    else if (painelItems.some(item => pathname === item.path)) initial.painel = true;
+    if (painelItems.some(item => pathname === item.path)) initial.painel = true;
     else if (operacoesItems.some(item => pathname === item.path)) initial.operacoes = true;
     else if (financeiroItems.some(item => pathname === item.path)) initial.financeiro = true;
     else if (complianceItems.some(item => pathname === item.path)) initial.compliance = true;
     else if (sistemaItems.some(item => pathname === item.path)) initial.sistema = true;
-    else initial.coco = true;
+    else if (diaristasItems.some(item => pathname === item.path)) initial.diaristas = true;
+    else if (mototaxiItems.some(item => pathname === item.path)) initial.mototaxi = true;
+    else if (ambulantesItems.some(item => pathname === item.path)) initial.ambulantes = true;
+    else if (cocoItems.some(item => pathname === item.path || pathname.startsWith("/admin/coco"))) initial.coco = true;
+    else initial.painel = true;
     return initial;
   });
 
@@ -317,12 +343,15 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
         </span>
       </div>
       <nav style={{ flex: 1, padding: "8px 12px", display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
-        {renderCategory("coco", "Côco & Cia", Recycle, cocoItems)}
         {renderCategory("painel", "Painel de Controle", BarChart3, painelItems)}
         {renderCategory("operacoes", "Operações & Entidades", Users, operacoesItems)}
         {renderCategory("financeiro", "Financeiro", CreditCard, financeiroItems)}
         {renderCategory("compliance", "Compliance & Risco", ShieldAlert, complianceItems)}
         {renderCategory("sistema", "Sistema & Config", Settings, sistemaItems)}
+        {renderCategory("diaristas", "Diaristas", Sparkles, diaristasItems)}
+        {renderCategory("mototaxi", "Mototaxistas", Bike, mototaxiItems)}
+        {renderCategory("ambulantes", "Ambulantes", ShoppingBag, ambulantesItems)}
+        {renderCategory("coco", "Côco & Cia", Recycle, cocoItems)}
       </nav>
       <div
         style={{
