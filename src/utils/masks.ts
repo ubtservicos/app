@@ -40,17 +40,25 @@ export const maskCNPJ = (v: string) =>
     .slice(0, 18);
 
 export const generateReferralSlug = (name?: string, id?: string): string => {
-  if (!name && !id) return "fundador-ubt";
-  const cleanName = (name || "fundador")
+  const rawFirstName = (name || "fundador").trim().split(" ")[0] || "fundador";
+  const cleanFirstName = rawFirstName
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-");
-  
-  const shortId = id ? id.replace(/-/g, "").slice(-3) : "001";
-  return `${cleanName || "fundador"}-${shortId}`;
+    .replace(/[^a-z0-9]/g, "");
+
+  const safeName = cleanFirstName || "fundador";
+
+  // Alphanumeric 4-character short code
+  let shortCode = "x7a9";
+  if (id) {
+    const cleanId = id.replace(/[^a-zA-Z0-9]/g, "");
+    shortCode = cleanId.slice(-4) || "x7a9";
+  } else {
+    shortCode = Math.random().toString(36).substring(2, 6);
+  }
+
+  return `${safeName}-${shortCode}`;
 };
 

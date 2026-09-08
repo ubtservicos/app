@@ -202,7 +202,7 @@ export default function WelcomeFundadorModal({
           <div className="p-2.5 rounded-xl bg-white/5 border border-white/5 flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-[#F5A623] shrink-0" />
             <span className="text-[10px] text-white/60 font-sans leading-tight">
-              Sorteios de 1% dos Fundos
+              Sorteios de 0,5% dos Fundos
             </span>
           </div>
         </div>

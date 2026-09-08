@@ -34,6 +34,7 @@ export interface WaitlistItem {
   created_at_utc: string;
   created_at_local: string;
   nome: string;
+  cpf?: string | null;
   email: string;
   telefone: string;
   cidade: string;
@@ -775,7 +776,11 @@ export default function AdminWaitlistPage() {
                 <div style={{ fontSize: 15, fontWeight: 700, color: "var(--admin-text)" }}>{selectedLeadModal.nome}</div>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                <div>
+                  <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>CPF</span>
+                  <div style={{ fontSize: 14, color: "var(--admin-subtle)" }}>{selectedLeadModal.cpf || "—"}</div>
+                </div>
                 <div>
                   <span style={{ fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase", fontWeight: 600 }}>E-mail</span>
                   <div style={{ fontSize: 14, color: "var(--admin-subtle)" }}>{selectedLeadModal.email}</div>

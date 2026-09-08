@@ -34,7 +34,7 @@ import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { maskPhone, generateReferralSlug } from "@/utils/masks";
+import { maskPhone, maskCPF, generateReferralSlug } from "@/utils/masks";
 import WelcomeFundadorModal from "@/components/WelcomeFundadorModal";
 import JaSouFundadorModal from "@/components/JaSouFundadorModal";
 import IosInstallModal from "@/components/IosInstallModal";
@@ -71,11 +71,11 @@ const FAQ_ITEMS = [
   },
   {
     question: "Como funciona o Programa Padrinho/Madrinha?",
-    answer: "Para incentivar a colaboração orgânica, até 1% do valor de todas as transações realizadas pelos prestadores que você indicou é revertido diretamente para você como bônus de indicação, promovendo o crescimento mútuo na rede."
+    answer: "Para incentivar a colaboração orgânica, até 0,5% do valor de todas as transações realizadas pelos prestadores que você indicou é revertido diretamente para você como bônus de indicação, promovendo o crescimento mútuo na rede."
   },
   {
     question: "Como funcionam os prêmios?",
-    answer: "Destinamos 1% do volume de vendas para o Fundo Trabalhador (com sorteio anual no dia 01 de maio) e 1% para o Fundo Consumidor (com sorteio anual no dia 01 de novembro). Todos os usuários ativos na plataforma concorrem automaticamente, gerando um ecossistema de incentivo à fidelidade local."
+    answer: "Destinamos 0,5% do volume de vendas para o Fundo Trabalhador (com sorteio anual no dia 01 de maio) e 0,5% para o Fundo Consumidor (com sorteio anual no dia 01 de novembro). Todos os usuários ativos na plataforma concorrem automaticamente, gerando um ecossistema de incentivo à fidelidade local."
   },
   {
     question: "Como funciona a Côco & Cia?",
@@ -346,6 +346,10 @@ const PRAIAS_LIST = [
 
 const waitlistSchema = z.object({
   nome: z.string().min(3, "Mínimo 3 caracteres"),
+  cpf: z
+    .string()
+    .min(14, "Informe o CPF completo")
+    .refine((val) => val.replace(/\D/g, "").length === 11, "CPF deve ter 11 dígitos"),
   email: z.string().email("E-mail inválido"),
   telefone: z.string().min(10, "Telefone incompleto"),
   perfil: z.array(z.string()).min(1, "Selecione ao menos um perfil"),
@@ -483,6 +487,7 @@ export default function Index() {
     mode: "onChange",
     defaultValues: {
       nome: "",
+      cpf: "",
       telefone: "",
       email: "",
       perfil: [],
@@ -710,7 +715,7 @@ export default function Index() {
       "Diarista contratada em Perequê-Açu",
       "1.2kg recicláveis marcados em Praia Grande",
       "Ambulante ativado em Tenório",
-      "Novo padrinho registrado (+1% de repasse)",
+      "Novo padrinho registrado (+0,5% de repasse)",
       "Coleta finalizada em Toninhas",
       "Prêmio Consumidor acumulado: R$ 421.00",
       "Split financeiro: 2% transferido para Associação"
@@ -800,9 +805,12 @@ export default function Index() {
       }
       const obsText = obsParts.join(" | ");
 
+      const cleanCpf = values.cpf ? values.cpf.replace(/\D/g, "") : null;
+
       // 2. Montar Payload estrito alinhado com a tabela public.waitlist
       const payload = {
         nome: values.nome.trim(),
+        cpf: cleanCpf,
         email: values.email.trim().toLowerCase(),
         telefone: values.telefone.trim(),
         cidade: "Ubatuba",
@@ -1357,7 +1365,7 @@ export default function Index() {
                 <span className="text-[10px] tracking-widest font-mono text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 px-3 py-1 rounded-full">
                   Prêmio Trabalhador
                 </span>
-                <span className="text-2xl font-display font-bold text-yellow-400">1%</span>
+                <span className="text-2xl font-display font-bold text-yellow-400">0,5%</span>
               </div>
               <h3 className="font-display font-bold text-xl text-white mb-4 transition-colors">
                 Quem trabalha também pode ganhar.
@@ -1367,7 +1375,7 @@ export default function Index() {
               </p>
             </div>
             <div className="text-[10px] font-semibold text-yellow-400 border-t border-[#0d5236]/30 pt-4 flex items-center gap-1">
-              <Award className="w-4 h-4 text-yellow-400" /> 1% das vendas compõe este fundo.
+              <Award className="w-4 h-4 text-yellow-400" /> 0,5% das vendas compõe este fundo.
             </div>
           </div>
 
@@ -1378,7 +1386,7 @@ export default function Index() {
                 <span className="text-[10px] tracking-widest font-mono text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 px-3 py-1 rounded-full">
                   Prêmio Consumidor
                 </span>
-                <span className="text-2xl font-display font-bold text-yellow-400">1%</span>
+                <span className="text-2xl font-display font-bold text-yellow-400">0,5%</span>
               </div>
               <h3 className="font-display font-bold text-xl text-white mb-4 transition-colors">
                 Quem compra também participa.
@@ -1388,7 +1396,7 @@ export default function Index() {
               </p>
             </div>
             <div className="text-[10px] font-semibold text-yellow-400 border-t border-[#0d5236]/30 pt-4 flex items-center gap-1">
-              <Award className="w-4 h-4 text-yellow-400" /> 1% das vendas compõe este fundo.
+              <Award className="w-4 h-4 text-yellow-400" /> 0,5% das vendas compõe este fundo.
             </div>
           </div>
 
@@ -1592,25 +1600,52 @@ export default function Index() {
                 </div>
               )}
 
-              {/* 1. Nome completo */}
-              <div>
-                <label htmlFor="waitlist-input-nome" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
-                  Nome Completo <span className="text-red-500">*</span>
-                </label>
-                <input 
-                  id="waitlist-input-nome"
-                  type="text" 
-                  placeholder="Ex: Carlos da Silva" 
-                  {...register("nome")}
-                  className={`w-full px-6 py-5 rounded-2xl bg-white/5 border ${
-                    errors.nome ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
-                  } outline-none text-white text-base transition-all`}
-                />
-                {errors.nome && (
-                  <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
-                    <span>⚠</span> {errors.nome.message}
-                  </p>
-                )}
+              {/* 1. Nome completo e CPF */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                  <label htmlFor="waitlist-input-nome" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                    Nome Completo <span className="text-red-500">*</span>
+                  </label>
+                  <input 
+                    id="waitlist-input-nome"
+                    type="text" 
+                    placeholder="Ex: Carlos da Silva" 
+                    {...register("nome")}
+                    className={`w-full px-6 py-5 rounded-2xl bg-white/5 border ${
+                      errors.nome ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                    } outline-none text-white text-base transition-all`}
+                  />
+                  {errors.nome && (
+                    <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                      <span>⚠</span> {errors.nome.message}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label htmlFor="waitlist-input-cpf" className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                    CPF <span className="text-red-500">*</span>
+                  </label>
+                  <input 
+                    id="waitlist-input-cpf"
+                    type="text" 
+                    placeholder="000.000.000-00" 
+                    {...register("cpf", {
+                      onChange: (e) => {
+                        setValue("cpf", maskCPF(e.target.value), { shouldValidate: true });
+                      }
+                    })}
+                    maxLength={14}
+                    className={`w-full px-6 py-5 rounded-2xl bg-white/5 border ${
+                      errors.cpf ? "border-red-500/70 focus:border-red-500 ring-1 ring-red-500/20" : "border-white/10 focus:border-green"
+                    } outline-none text-white text-base transition-all`}
+                  />
+                  {errors.cpf && (
+                    <p className="mt-1.5 text-red-500 text-xs pl-1 font-medium flex items-center gap-1">
+                      <span>⚠</span> {errors.cpf.message}
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
