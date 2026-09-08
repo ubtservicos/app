@@ -27,7 +27,9 @@ export function usePwaInstall() {
 
     const checkIOS = () => {
       const userAgent = window.navigator.userAgent.toLowerCase();
-      setIsIOS(/iphone|ipad|ipod/.test(userAgent));
+      const isAppleMobile = /iphone|ipad|ipod/.test(userAgent) || 
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      setIsIOS(isAppleMobile);
     };
 
     checkIOS();
@@ -43,15 +45,26 @@ export function usePwaInstall() {
     };
   }, []);
 
-  const install = async () => {
-    if (!deferredPrompt) return "prompt_unavailable";
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === "accepted") {
-      globalDeferredPrompt = null;
-      setDeferredPrompt(null);
+  const install = async (): Promise<"accepted" | "dismissed" | "ios_instructions" | "prompt_unavailable"> => {
+    if (deferredPrompt) {
+      try {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === "accepted") {
+          globalDeferredPrompt = null;
+          setDeferredPrompt(null);
+        }
+        return outcome;
+      } catch (err) {
+        console.error("Erro ao disparar prompt nativo de instalação:", err);
+      }
     }
-    return outcome;
+    
+    if (isIOS) {
+      return "ios_instructions";
+    }
+
+    return "prompt_unavailable";
   };
 
   return {

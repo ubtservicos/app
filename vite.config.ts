@@ -3,6 +3,52 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 
+// Dynamic PWA Manifest Plugin
+function dynamicManifestPlugin(mode: string) {
+  const isProd = 
+    process.env.VITE_APP_ENV === "production" || 
+    (process.env.VERCEL_ENV === "production" && !process.env.VERCEL_URL?.includes("homolog") && process.env.VITE_APP_ENV !== "homolog");
+
+  const manifestData = {
+    short_name: isProd ? "UBT" : "UBT Homolog",
+    name: isProd ? "UBT — O Superapp do Trabalhador" : "UBT Homolog — O Superapp do Trabalhador",
+    icons: [
+      {
+        src: "/favicon.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "any maskable"
+      }
+    ],
+    start_url: "/",
+    background_color: "#0B1B3E",
+    theme_color: "#0B1B3E",
+    display: "standalone",
+    orientation: "portrait"
+  };
+
+  return {
+    name: "dynamic-pwa-manifest",
+    configureServer(server: any) {
+      server.middlewares.use((req: any, res: any, next: any) => {
+        if (req.url === "/manifest.json") {
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify(manifestData, null, 2));
+          return;
+        }
+        next();
+      });
+    },
+    generateBundle(this: any) {
+      this.emitFile({
+        type: "asset",
+        fileName: "manifest.json",
+        source: JSON.stringify(manifestData, null, 2),
+      });
+    }
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
@@ -12,7 +58,11 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
   },
-  plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  plugins: [
+    react(),
+    dynamicManifestPlugin(mode),
+    mode === "development" && componentTagger()
+  ].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

@@ -33,4 +33,43 @@ try {
 }
 */
 
+// Dynamically configure Manifest & Title for Environment
+try {
+  const isProd = 
+    window.location.hostname === "ubt.app.br" ||
+    (import.meta.env.VITE_APP_ENV === "production" && 
+     !window.location.hostname.includes("homolog") && 
+     !window.location.hostname.includes("localhost"));
+  
+  if (!isProd && typeof document !== "undefined") {
+    // Dynamic manifest for preview / homolog / dev
+    const homologManifest = {
+      short_name: "UBT Homolog",
+      name: "UBT Homolog — O Superapp do Trabalhador",
+      icons: [
+        {
+          src: "/favicon.png",
+          sizes: "512x512",
+          type: "image/png",
+          purpose: "any maskable"
+        }
+      ],
+      start_url: "/",
+      background_color: "#0B1B3E",
+      theme_color: "#0B1B3E",
+      display: "standalone",
+      orientation: "portrait"
+    };
+
+    const manifestBlob = new Blob([JSON.stringify(homologManifest)], { type: "application/json" });
+    const manifestURL = URL.createObjectURL(manifestBlob);
+    const linkEl = document.querySelector('link[rel="manifest"]');
+    if (linkEl) {
+      linkEl.setAttribute("href", manifestURL);
+    }
+  }
+} catch (e) {
+  console.debug("[PWA] Dynamic manifest initialization bypassed:", e);
+}
+
 createRoot(document.getElementById("root")!).render(<App />);

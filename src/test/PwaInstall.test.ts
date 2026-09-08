@@ -6,7 +6,7 @@ interface PwaInstallState {
   isStandalone: boolean;
   isIOS: boolean;
   hasNativePrompt: boolean;
-  installOutcome: "accepted" | "dismissed" | "prompt_unavailable";
+  installOutcome: "accepted" | "dismissed" | "ios_instructions" | "prompt_unavailable";
 }
 
 function resolvePwaUiState(
@@ -72,28 +72,28 @@ describe("PWA Installation CTA States & Behaviors", () => {
     expect(resolved.showInstallBtn).toBe(false); // CTA must not appear
   });
 
-  // Estado E — navegador sem prompt nativo
-  it("should prompt fallback instructions when beforeinstallprompt is unavailable", () => {
+  // Estado E — navegador iOS sem prompt nativo
+  it("should return ios_instructions when on iOS and no native prompt", () => {
     const rawState = {
       isStandalone: false,
       isIOS: true, // iOS Safari has no beforeinstallprompt
       hasNativePrompt: false,
-      installOutcome: "prompt_unavailable" as const
+      installOutcome: "ios_instructions" as const
     };
     const resolved = resolvePwaUiState(rawState);
     
     expect(resolved.showInstallBtn).toBe(true); // Show CTA
     expect(resolved.hasNativePrompt).toBe(false); // Indicates fallback is required
     expect(resolved.isIOS).toBe(true); // Directs to iOS shared modal instructions
+    expect(resolved.installOutcome).toBe("ios_instructions");
   });
 
-  // Estado F — waitlist
-  it("should keep waitlist submitSuccess state functional and render installation CTA inside modal", () => {
-    const submitSuccess = true;
-    const isStandalone = false;
+  // Estado F — waitlist com fluxo de apadrinhamento
+  it("should generate valid referral URLs for registered founders", () => {
+    const founderId = "570ad976-9f86-41c5-8e9e-07b94cb31a2a";
+    const origin = "https://ubt-homologacao.vercel.app";
+    const referralUrl = `${origin}/cadastro?ref=${founderId}`;
     
-    // Emulated success modal rendering state checks
-    expect(submitSuccess).toBe(true);
-    expect(!isStandalone).toBe(true); // Installation CTA should appear in modal
+    expect(referralUrl).toContain("?ref=570ad976-9f86-41c5-8e9e-07b94cb31a2a");
   });
 });

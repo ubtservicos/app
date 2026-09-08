@@ -7,7 +7,7 @@ import {
   CheckCircle2, 
   Heart, 
   Award, 
-  HelpCircle,
+  HelpCircle, 
   Volume2, 
   VolumeX, 
   Send,
@@ -22,7 +22,8 @@ import {
   Share2,
   Menu,
   UserPlus,
-  Loader2
+  Loader2,
+  Copy
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { trackEvent } from "@/services/AnalyticsService";
@@ -35,6 +36,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { maskPhone } from "@/utils/masks";
 import WelcomeFundadorModal from "@/components/WelcomeFundadorModal";
+import JaSouFundadorModal from "@/components/JaSouFundadorModal";
+import IosInstallModal from "@/components/IosInstallModal";
 
 interface FaqItemProps {
   question: string;
@@ -430,6 +433,8 @@ export default function Index() {
   const [showIosGuide, setShowIosGuide] = useState(false);
   const [showGenericGuide, setShowGenericGuide] = useState(false);
   const [isBannerDismissed, setIsBannerDismissed] = useState(false);
+  const [isJaSouFundadorOpen, setIsJaSouFundadorOpen] = useState(false);
+  const [copiedReferral, setCopiedReferral] = useState(false);
 
   const handlePwaInstallClick = async () => {
     trackEvent("pwa_install_click", "engagement");
@@ -437,12 +442,13 @@ export default function Index() {
       setShowIosGuide(true);
       return;
     }
-    if (!hasNativePrompt) {
-      setShowGenericGuide(true);
-      return;
-    }
     const outcome = await install();
     trackEvent("pwa_install_prompt_outcome", "engagement", { outcome });
+    if (outcome === "ios_instructions") {
+      setShowIosGuide(true);
+    } else if (outcome === "prompt_unavailable") {
+      setShowGenericGuide(true);
+    }
   };
 
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
@@ -458,7 +464,7 @@ export default function Index() {
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
-  const [registeredUser, setRegisteredUser] = useState<{ nome: string; email: string } | null>(null);
+  const [registeredUser, setRegisteredUser] = useState<{ id?: string; nome: string; email: string } | null>(null);
 
   const [isBairroModalOpen, setIsBairroModalOpen] = useState(false);
   const [isPraiaModalOpen, setIsPraiaModalOpen] = useState(false);
@@ -818,10 +824,11 @@ export default function Index() {
 
       console.log("[Waitlist] Enviando cadastro com cliente público anon:", payload);
 
-      // 3. Execução direta do INSERT (sem pré-consulta SELECT restrita para anon)
+      // 3. Execução direta do INSERT com retorno do ID
       const { data: insertData, error: insertError } = await publicClient
         .from("waitlist")
-        .insert(payload);
+        .insert(payload)
+        .select();
 
       if (insertError) {
         console.error("[Waitlist] Erro no Supabase Insert:", insertError);
@@ -843,8 +850,10 @@ export default function Index() {
 
       console.log("[Waitlist] Cadastro realizado com sucesso:", insertData);
 
+      const insertedId = insertData && insertData[0] ? insertData[0].id : undefined;
+
       setSubmitSuccess(true);
-      setRegisteredUser({ nome: values.nome.trim(), email: values.email.trim() });
+      setRegisteredUser({ id: insertedId, nome: values.nome.trim(), email: values.email.trim() });
       setShowWelcomeModal(true);
       trackEvent("landing_waitlist_success", "marketing", { perfil: values.perfil });
       logSystem("INFO", "WAITLIST", "founder_signup_success", "success");
@@ -914,7 +923,7 @@ export default function Index() {
         </div>
 
         {/* Menu Navigation & Hamburger */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
           <div className="hidden md:flex items-center gap-8 text-xs font-semibold text-white/60 tracking-wider uppercase">
             <a href="#quem-faz-cap" className="hover:text-green transition-colors">Quem Faz</a>
             <a href="#conecta-cap" className="hover:text-green transition-colors">Conexões</a>
@@ -923,8 +932,16 @@ export default function Index() {
           </div>
           
           <button 
+            type="button"
+            onClick={() => setIsJaSouFundadorOpen(true)}
+            className="hidden md:inline-block px-5 py-2.5 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-white/80 hover:text-white font-display font-semibold text-xs uppercase tracking-wider transition-all cursor-pointer"
+          >
+            Já sou Fundador
+          </button>
+
+          <button 
             onClick={scrollToCta}
-            className="hidden md:inline-block px-6 py-2.5 rounded-full bg-green hover:bg-green-dark hover:shadow-lg hover:shadow-green/20 hover:scale-[1.03] active:scale-95 text-navy font-display font-bold text-xs uppercase tracking-wider transition-all"
+            className="hidden md:inline-block px-6 py-2.5 rounded-full bg-green hover:bg-green-dark hover:shadow-lg hover:shadow-green/20 hover:scale-[1.03] active:scale-95 text-navy font-display font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
           >
             Seja um Fundador
           </button>
@@ -960,7 +977,7 @@ export default function Index() {
           <div className="flex items-center gap-3">
             <button
               onClick={handlePwaInstallClick}
-              className="px-5 py-2.5 rounded-full bg-green hover:bg-green-dark hover:scale-[1.03] active:scale-95 text-navy font-display font-bold text-xs uppercase tracking-wider transition-all"
+              className="px-5 py-2.5 rounded-full bg-green hover:bg-green-dark hover:scale-[1.03] active:scale-95 text-navy font-display font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
             >
               Instalar UBT
             </button>
@@ -977,7 +994,7 @@ export default function Index() {
 
       {/* Mobile Menu Drawer */}
       {isMobileMenuOpen && (
-        <div className="fixed inset-0 bg-black/95 z-[100] flex flex-col items-center justify-center gap-8 animate-fadeIn md:hidden">
+        <div className="fixed inset-0 bg-black/95 z-[100] flex flex-col items-center justify-center gap-6 animate-fadeIn md:hidden">
           <button 
             onClick={() => setIsMobileMenuOpen(false)}
             className="absolute top-6 right-6 p-2 text-white hover:text-green transition-colors"
@@ -988,11 +1005,19 @@ export default function Index() {
           <a href="#conecta-cap" onClick={() => setIsMobileMenuOpen(false)} className="text-2xl font-display font-bold text-white hover:text-green">Conexões</a>
           <a href="#todos-ganham-cap" onClick={() => setIsMobileMenuOpen(false)} className="text-2xl font-display font-bold text-white hover:text-green">Prêmios</a>
           <a href="#faq-section" onClick={() => setIsMobileMenuOpen(false)} className="text-2xl font-display font-bold text-white hover:text-green">FAQ</a>
+          
           <button 
             onClick={() => { setIsMobileMenuOpen(false); scrollToCta(); }}
-            className="mt-4 px-8 py-3.5 rounded-full bg-green text-navy font-display font-extrabold text-sm uppercase tracking-wider shadow-lg shadow-green/20"
+            className="mt-4 px-8 py-3.5 rounded-full bg-green text-navy font-display font-extrabold text-sm uppercase tracking-wider shadow-lg shadow-green/20 cursor-pointer"
           >
             Seja um Fundador
+          </button>
+
+          <button 
+            onClick={() => { setIsMobileMenuOpen(false); setIsJaSouFundadorOpen(true); }}
+            className="px-8 py-3 rounded-full bg-white/5 border border-white/15 text-white/90 font-display font-bold text-xs uppercase tracking-wider cursor-pointer"
+          >
+            Já sou Fundador
           </button>
         </div>
       )}
@@ -1030,13 +1055,13 @@ export default function Index() {
           {/* Linha horizontal com gradiente */}
           <div className="w-24 h-1 bg-gradient-to-r from-[#005BFF] to-[#22C55E] rounded-full mb-8 animate-fadeIn" style={{ animationDelay: "350ms" }} />
 
-          {/* Botões principal e secundário */}
-          <div className="flex flex-col gap-4 w-full max-w-md mb-8 animate-fadeIn" style={{ animationDelay: "400ms" }}>
+          {/* Botões principal e secundários */}
+          <div className="flex flex-col gap-3 w-full max-w-md mb-8 animate-fadeIn" style={{ animationDelay: "400ms" }}>
             
             {/* Botão principal */}
             <button
               onClick={scrollToCta}
-              className="w-full h-16 rounded-2xl bg-gradient-to-r from-[#005BFF] to-[#22C55E] hover:from-[#00A3FF] hover:to-[#22C55E] font-['Poppins'] font-bold text-xs sm:text-sm tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,91,255,0.2)] hover:shadow-[0_0_25px_rgba(34,197,94,0.35)] hover:scale-[1.02] active:scale-95 text-white flex items-center justify-between px-8 border border-white/10"
+              className="w-full h-16 rounded-2xl bg-gradient-to-r from-[#005BFF] to-[#22C55E] hover:from-[#00A3FF] hover:to-[#22C55E] font-['Poppins'] font-bold text-xs sm:text-sm tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,91,255,0.2)] hover:shadow-[0_0_25px_rgba(34,197,94,0.35)] hover:scale-[1.02] active:scale-95 text-white flex items-center justify-between px-8 border border-white/10 cursor-pointer"
             >
               <div className="flex items-center gap-3">
                 <UserPlus className="w-5 h-5" />
@@ -1045,7 +1070,17 @@ export default function Index() {
               <ArrowRight className="w-5 h-5" />
             </button>
             
-            {/* Botão secundário */}
+            {/* Botão secundário: Já sou Fundador */}
+            <button
+              type="button"
+              onClick={() => setIsJaSouFundadorOpen(true)}
+              className="w-full h-13 py-3.5 rounded-2xl bg-white/5 hover:bg-white/10 text-white/90 hover:text-white border border-white/15 font-['Poppins'] font-bold text-xs sm:text-sm tracking-wider uppercase transition-all flex items-center justify-center gap-2.5 active:scale-95 shadow-sm cursor-pointer"
+            >
+              <Users className="w-4 h-4 text-green" />
+              <span>JÁ SOU FUNDADOR</span>
+            </button>
+
+            {/* Botão assistir ao filme (se ativado futuramente) */}
             <button
               onClick={() => openVideoModal(0)}
               className="hidden w-full h-16 rounded-2xl font-['Poppins'] font-bold text-xs sm:text-sm tracking-widest uppercase transition-all text-white items-center justify-center gap-3 hover:scale-[1.02] active:scale-95"
@@ -1436,18 +1471,72 @@ export default function Index() {
           <div className="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-green/10 blur-[90px] pointer-events-none" />
 
           {submitSuccess ? (
-            <div className="text-center py-12 max-w-md mx-auto px-4">
-              <div className="w-20 h-20 rounded-full bg-green/10 border border-green/30 flex items-center justify-center text-green mx-auto mb-8 animate-bounce">
+            <div className="text-center py-12 max-w-lg mx-auto px-4">
+              <div className="w-20 h-20 rounded-full bg-green/10 border border-green/30 flex items-center justify-center text-green mx-auto mb-6 animate-bounce">
                 <CheckCircle2 size={40} />
               </div>
               <span className="text-[10px] tracking-[0.2em] font-mono text-green uppercase block mb-2">Sucesso no Cadastro</span>
-              <h3 className="font-display font-extrabold text-3xl text-white mb-4">Você já é um Fundador da UBT! 🎉</h3>
+              <h3 className="font-display font-extrabold text-3xl text-white mb-3">Você já é um Fundador da UBT! 🎉</h3>
               <p className="text-sm text-white/70 leading-relaxed font-sans mb-6">
                 Parabéns, seu cadastro foi registrado com sucesso na nossa fila de espera pública. Juntos vamos construir uma Ubatuba muito mais próspera e conectada.
               </p>
 
-              {/* PWA Install CTA within Success Modal */}
-              <div className="mb-8 p-6 rounded-2xl bg-white/5 border border-white/10 text-center">
+              {/* Referral / Apadrinhamento Box */}
+              <div className="w-full p-5 rounded-2xl bg-white/5 border border-white/10 text-left mb-6 flex flex-col gap-3">
+                <div className="flex items-center gap-2 text-xs font-bold text-white">
+                  <Users className="w-4 h-4 text-green" />
+                  <span>Seu Link Exclusivo de Indicação:</span>
+                </div>
+                <p className="text-[11px] text-white/60 font-sans leading-relaxed">
+                  Ganhe até <strong>1% de comissão</strong> nas corridas e serviços concluídos pelas pessoas que você indicar, além de concorrer aos prêmios dos Fundos UBT!
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={registeredUser?.id ? `${window.location.origin}/cadastro?ref=${registeredUser.id}` : `${window.location.origin}/cadastro`}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-white/10 text-white/90 text-xs font-mono select-all outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const link = registeredUser?.id ? `${window.location.origin}/cadastro?ref=${registeredUser.id}` : `${window.location.origin}/cadastro`;
+                      navigator.clipboard.writeText(link);
+                      setCopiedReferral(true);
+                      setTimeout(() => setCopiedReferral(false), 3000);
+                      trackEvent("waitlist_success_referral_copy", "marketing", { id: registeredUser?.id });
+                    }}
+                    className="px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-display font-bold text-xs flex items-center gap-1.5 transition-all shrink-0 border border-white/10 cursor-pointer active:scale-95"
+                  >
+                    {copiedReferral ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-green" />
+                        <span className="text-green">Copiado</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copiar</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <a
+                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
+                    `🚀 Olá! Conheça a UBT, a plataforma que conecta prestadores de serviço locais com taxas justas em Ubatuba.\n\nCadastre-se como pioneiro(a) pelo meu link exclusivo de fundador e garanta benefícios:\n${registeredUser?.id ? `${window.location.origin}/cadastro?ref=${registeredUser.id}` : `${window.location.origin}/cadastro`}`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => trackEvent("waitlist_success_share_whatsapp", "marketing", { id: registeredUser?.id })}
+                  className="w-full py-3 rounded-xl font-display font-bold text-xs tracking-wider uppercase bg-[#25D366] hover:bg-[#20bd5a] text-black shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                >
+                  <Share2 className="w-4 h-4" />
+                  <span>Compartilhar no WhatsApp</span>
+                </a>
+              </div>
+
+              {/* PWA Install CTA within Success View */}
+              <div className="mb-6 p-6 rounded-2xl bg-white/5 border border-white/10 text-center">
                 {isStandalone ? (
                   <p className="text-xs text-green font-semibold font-sans">
                     A UBT já está instalada neste celular.
@@ -1458,7 +1547,7 @@ export default function Index() {
                     <p className="text-xs text-white/60 mb-4 font-sans">Instale a UBT no seu celular para acesso rápido.</p>
                     <button
                       onClick={handlePwaInstallClick}
-                      className="px-6 py-2.5 rounded-full bg-[#005BFF] hover:bg-[#005BFF]/90 hover:scale-[1.02] text-white font-display font-bold text-xs uppercase tracking-wider transition-all"
+                      className="px-6 py-2.5 rounded-full bg-[#005BFF] hover:bg-[#005BFF]/90 hover:scale-[1.02] text-white font-display font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
                     >
                       Instalar UBT
                     </button>
@@ -1785,6 +1874,17 @@ export default function Index() {
                     <Send className="w-5 h-5" />
                   </>
                 )}
+              </button>
+
+              {/* Botão Secundário: Já sou Fundador */}
+              <button
+                type="button"
+                onClick={() => setIsJaSouFundadorOpen(true)}
+                className="w-full py-3.5 rounded-2xl bg-white/5 hover:bg-white/10 text-white/80 hover:text-white border border-white/10 text-xs font-mono uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-98"
+              >
+                <Users className="w-3.5 h-3.5 text-green" />
+                <span>Já realizou sua inscrição?</span>
+                <span className="text-green font-bold underline underline-offset-4">Já sou Fundador</span>
               </button>
             </form>
           )}
@@ -2148,11 +2248,24 @@ export default function Index() {
         onClose={() => setShowWelcomeModal(false)}
         userName={registeredUser?.nome}
         userEmail={registeredUser?.email}
-        ctaText="Acessar meu Painel"
+        userId={registeredUser?.id}
+        ctaText="Concluir"
         onCtaClick={() => {
           setShowWelcomeModal(false);
-          navigate("/login");
         }}
+      />
+
+      {/* Modal Já Sou Fundador (Consulta e Apadrinhamento) */}
+      <JaSouFundadorModal
+        isOpen={isJaSouFundadorOpen}
+        onClose={() => setIsJaSouFundadorOpen(false)}
+        onRegisterClick={scrollToCta}
+      />
+
+      {/* Modal Guia de Instalação no iOS Safari */}
+      <IosInstallModal
+        isOpen={showIosGuide}
+        onClose={() => setShowIosGuide(false)}
       />
 
     </div>
