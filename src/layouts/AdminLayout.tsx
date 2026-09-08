@@ -70,13 +70,11 @@ export const DIARISTAS_NAV_ITEMS = [
 
 export const MOTOTAXI_NAV_ITEMS = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/admin/mototaxistas/dashboard", roles: ["operator", "admin", "super_admin"] },
-  { icon: Clock, label: "KYC Mototaxistas", path: "/admin/kyc-pendentes", roles: ["operator", "admin", "super_admin"] },
 ];
 
 export const AMBULANTES_NAV_ITEMS = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/admin/ambulantes/dashboard", roles: ["operator", "admin", "super_admin"] },
   { icon: Utensils, label: "Cardápios Padrão", path: "/admin/ambulantes/cardapios", roles: ["operator", "admin", "super_admin"] },
-  { icon: ShoppingBag, label: "Catálogo de Produtos", path: "/app/ambulantes", roles: ["operator", "admin", "super_admin"] },
 ];
 
 export const NAV_ITEMS = [
@@ -85,7 +83,7 @@ export const NAV_ITEMS = [
   { icon: Clock, label: "KYCs Pendentes", path: "/admin/kyc-pendentes", roles: ["operator", "admin", "super_admin"] },
   { icon: Users, label: "Clientes", path: "/admin/clientes", roles: ["operator", "moderador", "admin", "super_admin"] },
   { icon: BarChart2, label: "Financeiro", path: "/admin/financeiro", roles: ["financeiro", "admin", "super_admin"] },
-  { icon: CreditCard, label: "Pagamentos", path: "/admin/payments", roles: ["financeiro", "admin", "super_admin"] },
+  { icon: CreditCard, label: "Transações", path: "/admin/payments", roles: ["financeiro", "admin", "super_admin"] },
   { icon: Landmark, label: "Saques / Payouts", path: "/admin/payouts", roles: ["financeiro", "admin", "super_admin"] },
   { icon: ShieldAlert, label: "Mediações", path: "/admin/disputes", roles: ["moderador", "admin", "super_admin"] },
   { icon: RefreshCw, label: "Estornos", path: "/admin/refunds", roles: ["financeiro", "admin", "super_admin"] },
@@ -106,7 +104,6 @@ export const NAV_ITEMS = [
   { icon: Scale, label: "Arbitragem", path: "/admin/arbitragem", roles: ["moderador", "admin", "super_admin"] },
   { icon: Megaphone, label: "Conteúdo", path: "/admin/conteudo", roles: ["operator", "admin", "super_admin"] },
   { icon: Send, label: "Mensageria", path: "/admin/mensageria", roles: ["admin", "super_admin", "superadmin"] },
-  { icon: ShieldAlert, label: "Aprovações Pendentes", path: "/app/admin/aprovacoes", roles: ["admin", "super_admin"] },
   { icon: BookOpen, label: "Wiki / Conhecimento", path: "/app/admin/wiki", roles: ["operator", "operations_manager", "financeiro", "moderador", "admin", "super_admin"] },
   { icon: FileCheck, label: "Auditoria de Docs", path: "/app/admin/documentos", roles: ["admin", "super_admin"] },
 ];
@@ -193,7 +190,7 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
 
   // Categorize filtered items
   const painelItems = filteredItems.filter(item => ["/admin", "/admin/operacoes", "/admin/health"].includes(item.path));
-  const operacoesItems = filteredItems.filter(item => ["/admin/clientes", "/admin/kyc-pendentes", "/admin/mensageria", "/app/admin/aprovacoes", "/admin/waitlist", "/admin/entidades", "/admin/conteudo"].includes(item.path));
+  const operacoesItems = filteredItems.filter(item => ["/admin/clientes", "/admin/kyc-pendentes", "/admin/mensageria", "/admin/waitlist", "/admin/entidades", "/admin/conteudo"].includes(item.path));
   const financeiroItems = filteredItems.filter(item => ["/admin/payments", "/admin/payouts", "/admin/refunds", "/admin/split", "/admin/preco", "/admin/financeiro", "/admin/sorteio/1-5", "/admin/sorteio/1-11"].includes(item.path));
   const complianceItems = filteredItems.filter(item => ["/app/admin/documentos", "/admin/disputes", "/admin/arbitragem", "/admin/cancellations", "/admin/antifraude", "/admin/analytics"].includes(item.path));
   const sistemaItems = filteredItems.filter(item => ["/admin/configuracoes", "/admin/security", "/admin/lgpd", "/admin/auditoria", "/app/admin/wiki", "/admin/quality", "/admin/permissoes"].includes(item.path));
