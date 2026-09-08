@@ -178,31 +178,35 @@ export const geocodeAddress = async (address: string): Promise<{ lat: number; ln
         // -------------------------------------------------------------
         // PASSO 1: Verificar no Cache Remoto (Supabase endereco_cache)
         // -------------------------------------------------------------
-        const { data: remoteCache, error: remoteErr } = await supabase
-            .from('endereco_cache')
-            .select('*')
-            .or(`query.eq."${address}",normalized_query.eq."${normalized}"`)
-            .limit(1)
-            .maybeSingle();
+        try {
+            const { data: remoteCache, error: remoteErr } = await supabase
+                .from('endereco_cache')
+                .select('*')
+                .eq('normalized_query', normalized)
+                .limit(1)
+                .maybeSingle();
 
-        if (!remoteErr && remoteCache) {
-            const elapsed = Date.now() - startTime;
-            // Atualizar cache local
-            localCache.set(normalized, {
-                lat: Number(remoteCache.latitude),
-                lng: Number(remoteCache.longitude),
-                label: remoteCache.query,
-                provider: remoteCache.provider
-            });
-            saveLocalCache();
+            if (!remoteErr && remoteCache) {
+                const elapsed = Date.now() - startTime;
+                // Atualizar cache local
+                localCache.set(normalized, {
+                    lat: Number(remoteCache.latitude),
+                    lng: Number(remoteCache.longitude),
+                    label: remoteCache.query,
+                    provider: remoteCache.provider
+                });
+                saveLocalCache();
 
-            logMetric('cache_hit', address, normalized, remoteCache.provider, elapsed);
-            logMetric('avg_time', address, normalized, remoteCache.provider, elapsed);
-            return {
-                lat: Number(remoteCache.latitude),
-                lng: Number(remoteCache.longitude),
-                label: remoteCache.query
-            };
+                logMetric('cache_hit', address, normalized, remoteCache.provider, elapsed);
+                logMetric('avg_time', address, normalized, remoteCache.provider, elapsed);
+                return {
+                    lat: Number(remoteCache.latitude),
+                    lng: Number(remoteCache.longitude),
+                    label: remoteCache.query
+                };
+            }
+        } catch (err) {
+            // Segue suavemente para os provedores de fallback
         }
 
         // -------------------------------------------------------------

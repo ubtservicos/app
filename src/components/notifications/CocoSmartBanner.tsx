@@ -45,33 +45,56 @@ export default function CocoSmartBanner({ currentAddress, onCtaClick }: CocoSmar
 
         if (error || !data || data.length === 0) return;
 
-        // Determine user neighborhood from profile or address prop
+        // Determine user neighborhood prioritizing bairro_moradia from profiles
         let userBairro = "";
-        if (currentAddress) {
-          userBairro = currentAddress;
-        } else if (user.uid) {
-          const { data: userProfile } = await supabase
-            .from("usuarios")
-            .select("bairro_moradia, bairro_trabalho")
-            .eq("id", user.uid)
-            .maybeSingle();
+        if (user.uid) {
+          try {
+            const { data: profData } = await supabase
+              .from("profiles")
+              .select("bairro_moradia, bairro_trabalho")
+              .eq("id", user.uid)
+              .maybeSingle();
 
-          if (userProfile?.bairro_moradia) {
-            userBairro = userProfile.bairro_moradia;
-          } else if (userProfile?.bairro_trabalho) {
-            userBairro = userProfile.bairro_trabalho;
+            if (profData?.bairro_moradia) {
+              userBairro = profData.bairro_moradia;
+            } else if (profData?.bairro_trabalho) {
+              userBairro = profData.bairro_trabalho;
+            } else {
+              const { data: userData } = await supabase
+                .from("usuarios")
+                .select("bairro_moradia, bairro_trabalho")
+                .eq("id", user.uid)
+                .maybeSingle();
+              if (userData?.bairro_moradia) {
+                userBairro = userData.bairro_moradia;
+              }
+            }
+          } catch (profileErr) {
+            console.warn("Erro ao consultar bairro do perfil:", profileErr);
           }
         }
 
+        if (!userBairro && currentAddress) {
+          userBairro = currentAddress;
+        }
+
         if (!userBairro) {
-          // If no specific neighborhood, pick the first one scheduled for tomorrow as a general city reminder
           setScheduleTomorrow(data[0]);
           return;
         }
 
-        const matched = data.find((item) =>
-          userBairro.toLowerCase().includes(item.bairro_nome.toLowerCase())
-        );
+        const cleanUserBairro = userBairro
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase();
+
+        const matched = data.find((item) => {
+          const cleanItemBairro = item.bairro_nome
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase();
+          return cleanUserBairro.includes(cleanItemBairro) || cleanItemBairro.includes(cleanUserBairro);
+        });
 
         if (matched) {
           setScheduleTomorrow(matched);

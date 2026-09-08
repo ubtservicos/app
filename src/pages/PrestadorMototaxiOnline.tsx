@@ -311,25 +311,31 @@ const PrestadorMototaxiOnline = () => {
     if (!user.uid) return;
 
     const fetchActiveChamado = async () => {
-      const { data, error } = await supabase
-        .from('mototaxi_corridas')
-        .select('*')
-        .eq('status', 'searching')
-        .order('created_at', { ascending: false })
-        .limit(1);
-      if (data && data.length > 0) {
-        const c = data[0];
-        const originObj = typeof c.origin === 'string' ? JSON.parse(c.origin) : c.origin;
-        const destObj = typeof c.destination === 'string' ? JSON.parse(c.destination) : c.destination;
-        setChamado({
-          id: c.id,
-          type: c.type,
-          origin: originObj.address || 'Origem',
-          destination: destObj.address || 'Destino',
-          distanceKm: Number(c.distance_km),
-          durationMin: c.duration_min,
-          price: Number(c.estimated_price)
-        });
+      try {
+        const { data, error } = await supabase
+          .from('mototaxi_corridas')
+          .select('*')
+          .eq('status', 'searching')
+          .is('prestador_id', null)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (!error && data && data.length > 0) {
+          const c = data[0];
+          const originObj = typeof c.origin === 'string' ? JSON.parse(c.origin) : c.origin;
+          const destObj = typeof c.destination === 'string' ? JSON.parse(c.destination) : c.destination;
+          setChamado({
+            id: c.id,
+            type: c.type,
+            origin: originObj?.address || (typeof originObj === 'string' ? originObj : 'Origem'),
+            destination: destObj?.address || (typeof destObj === 'string' ? destObj : 'Destino'),
+            distanceKm: Number(c.distance_km || 0),
+            durationMin: Number(c.duration_min || 0),
+            price: Number(c.estimated_price || 0)
+          });
+        }
+      } catch (err) {
+        console.error("Erro ao carregar chamados ativos:", err);
       }
     };
 
@@ -340,23 +346,31 @@ const PrestadorMototaxiOnline = () => {
   const handleNewCorrida = useCallback((payload: any) => {
     if (payload.new) {
       const c = payload.new;
-      const originObj = typeof c.origin === 'string' ? JSON.parse(c.origin) : c.origin;
-      const destObj = typeof c.destination === 'string' ? JSON.parse(c.destination) : c.destination;
-      setChamado({
-        id: c.id,
-        type: c.type,
-        origin: originObj.address || 'Origem',
-        destination: destObj.address || 'Destino',
-        distanceKm: Number(c.distance_km),
-        durationMin: c.duration_min,
-        price: Number(c.estimated_price)
-      });
+      if (c.status === 'searching' && !c.prestador_id) {
+        try {
+          const originObj = typeof c.origin === 'string' ? JSON.parse(c.origin) : c.origin;
+          const destObj = typeof c.destination === 'string' ? JSON.parse(c.destination) : c.destination;
+          setChamado({
+            id: c.id,
+            type: c.type,
+            origin: originObj?.address || (typeof originObj === 'string' ? originObj : 'Origem'),
+            destination: destObj?.address || (typeof destObj === 'string' ? destObj : 'Destino'),
+            distanceKm: Number(c.distance_km || 0),
+            durationMin: Number(c.duration_min || 0),
+            price: Number(c.estimated_price || 0)
+          });
+        } catch (err) {
+          console.error("Erro ao parsear chamada recebida:", err);
+        }
+      } else {
+        setChamado((prev) => (prev && prev.id === c.id ? null : prev));
+      }
     }
   }, []);
 
   useRealtimeChannel(
     'public:mototaxi_corridas',
-    { event: 'INSERT', table: 'mototaxi_corridas', filter: 'status=eq.searching' },
+    { event: '*', table: 'mototaxi_corridas' },
     handleNewCorrida,
     (status) => {
       if (status === 'reconnecting') toast.info('Reconectando ao servidor...');

@@ -11,6 +11,10 @@ import {
   CreditCard,
   Copy,
   Check,
+  MapPin,
+  Building2,
+  Waves,
+  Home,
 } from "lucide-react";
 import { Card, Avatar, Pill, KYC_PILL, GhostButton, PrimaryButton } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
@@ -35,6 +39,9 @@ interface DetailUser {
   cpf?: string;
   email: string;
   phone: string;
+  bairro_moradia?: string;
+  bairro_trabalho?: string;
+  praias_frequenta?: string;
   createdAt: string;
   kycStatus?: "approved" | "pending" | "rejected";
   services?: string[];
@@ -69,6 +76,7 @@ export default function AdminClienteDetailPage() {
 
   const [dbUser, setDbUser] = useState<any | null>(null);
   const [dbProfile, setDbProfile] = useState<any | null>(null);
+  const [dbWaitlist, setDbWaitlist] = useState<any | null>(null);
   const [mototaxi, setMototaxi] = useState<any | null>(null);
   const [diarista, setDiarista] = useState<any | null>(null);
   const [caminhao, setCaminhao] = useState<any | null>(null);
@@ -114,6 +122,26 @@ export default function AdminClienteDetailPage() {
         .select("*")
         .eq("id", id)
         .maybeSingle();
+
+      // Buscar waitlist correspondente se existir
+      let waitlistRow = null;
+      try {
+        const emailFilter = userData?.email || profileData?.email;
+        const phoneFilter = userData?.phone || profileData?.phone;
+        const orClauses = [];
+        if (emailFilter) orClauses.push(`email.eq.${emailFilter}`);
+        if (phoneFilter) orClauses.push(`telefone.eq.${phoneFilter}`);
+        if (orClauses.length > 0) {
+          const { data: wlData } = await supabase
+            .from("waitlist")
+            .select("*")
+            .or(orClauses.join(","))
+            .maybeSingle();
+          waitlistRow = wlData;
+        }
+      } catch (wlErr) {
+        console.warn("Aviso ao buscar dados complementares de waitlist:", wlErr);
+      }
 
       // 3. Buscar mototáxi
       const { data: motoData } = await supabase
@@ -171,9 +199,10 @@ export default function AdminClienteDetailPage() {
 
       setDbUser(userData);
       setDbProfile(profileData);
+      setDbWaitlist(waitlistRow);
       setMototaxi(motoData);
-      setDiarista(diaristaData);
       setCaminhao(caminhaoData);
+      setDiarista(diaristaData);
       setAssociacaoNome(assocName);
       setDbOrders(dbPedidos || []);
 
@@ -251,8 +280,18 @@ export default function AdminClienteDetailPage() {
     const name = dbUser.nome || dbProfile?.name || "Sem nome";
     const email = dbProfile?.email || dbUser.email || "Não informado";
     const phone = dbProfile?.phone || dbUser.phone || "Não cadastrado";
-    const rawCpf = dbProfile?.cpf || dbUser?.cpf || null;
+    const rawCpf = dbProfile?.cpf || dbUser?.cpf || dbWaitlist?.cpf || null;
     const cpf = rawCpf ? maskCPF(rawCpf) : "Não informado";
+
+    const extractPraias = (obs?: string | null) => {
+      if (!obs) return null;
+      const match = obs.match(/Praias:\s*([^|]+)/i);
+      return match ? match[1].trim() : null;
+    };
+
+    const bairroMoradia = dbProfile?.bairro_moradia || dbUser?.bairro_moradia || dbWaitlist?.bairro_moradia || null;
+    const bairroTrabalho = dbProfile?.bairro_trabalho || dbUser?.bairro_trabalho || dbWaitlist?.bairro_trabalho || null;
+    const praiasFrequenta = dbProfile?.praias_frequenta || dbUser?.praias_frequenta || extractPraias(dbWaitlist?.observacoes) || null;
 
     const detailUser: DetailUser = {
       id: dbUser.id,
@@ -261,6 +300,9 @@ export default function AdminClienteDetailPage() {
       cpf,
       email,
       phone,
+      bairro_moradia: bairroMoradia,
+      bairro_trabalho: bairroTrabalho,
+      praias_frequenta: praiasFrequenta,
       createdAt: dbUser.created_at || dbProfile?.created_at || new Date().toISOString(),
       kycStatus,
       services,
@@ -538,6 +580,27 @@ export default function AdminClienteDetailPage() {
                 <div>
                   <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>ID do Usuário</div>
                   <div style={{ fontFamily: "monospace", fontSize: 12, color: "var(--admin-subtle)", marginTop: 1 }}>{user.id}</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <Home size={16} color="var(--admin-muted)" />
+                <div>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Bairro de Moradia</div>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", marginTop: 1 }}>{user.bairro_moradia || "Não informado"}</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <Building2 size={16} color="var(--admin-muted)" />
+                <div>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Bairro de Trabalho</div>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", marginTop: 1 }}>{user.bairro_trabalho || "Não informado"}</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <Waves size={16} color="var(--admin-muted)" />
+                <div>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 11, color: "var(--admin-muted)" }}>Praias que Frequenta</div>
+                  <div style={{ fontFamily: "DM Sans", fontSize: 14, color: "var(--admin-text)", marginTop: 1 }}>{user.praias_frequenta || "Não informado"}</div>
                 </div>
               </div>
 
