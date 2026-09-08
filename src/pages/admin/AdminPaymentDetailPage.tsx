@@ -21,6 +21,8 @@ import {
   FileText,
   AlertCircle,
   RefreshCw,
+  MapPin,
+  Calendar,
 } from "lucide-react";
 import { Card, Pill } from "@/components/admin/ui";
 import { useAdminToast } from "@/components/admin/AdminToast";
@@ -83,7 +85,7 @@ export default function AdminPaymentDetailPage() {
   const [service, setService] = useState<ServiceData | null>(null);
   const [tomador, setTomador] = useState<ProfileData | null>(null);
   const [prestador, setPrestador] = useState<ProfileData | null>(null);
-  const [associationName, setAssociationName] = useState<string>("caixinha-mototaxista-sem-associação");
+  const [associationName, setAssociationName] = useState<string>("Associação");
   const [loading, setLoading] = useState(true);
   const [copiedReceipt, setCopiedReceipt] = useState(false);
   const [copiedTx, setCopiedTx] = useState(false);
@@ -158,6 +160,8 @@ export default function AdminPaymentDetailPage() {
 
             if (provAssoc?.association_id) {
               setAssociationName(`Associação (${provAssoc.association_id.slice(0, 8)})`);
+            } else {
+              setAssociationName("Associação");
             }
           }
         }
@@ -186,7 +190,7 @@ export default function AdminPaymentDetailPage() {
 📍 *Transação ID:* \`${payment.transaction_id}\`
 📅 *Data:* ${new Date(payment.created_at).toLocaleString("pt-BR")}
 ⚡ *Método:* PIX (Mercado Pago Sandbox)
-📊 *Status:* ${payment.status === "approved" ? "✅ APROVADO / LIQUIDADO" : "⏳ PENDENTE"}
+📊 *Status:* ${payment.status === "approved" || payment.status === "captured" ? "✅ APROVADO / LIQUIDADO" : "⏳ PENDENTE"}
 
 👤 *Tomador (Cliente):* ${tomName}
 🛵 *Prestador (Motorista):* ${prestName}
@@ -202,14 +206,14 @@ export default function AdminPaymentDetailPage() {
 2. Taxa UBT Plataforma: ${formatBR(payment.ubt_amount)} (7.5%)
 3. Padrinho Prestador: ${formatBR(payment.godparent_prestador_amount)} (0.5%)
 4. Padrinho Tomador: ${formatBR(payment.godparent_tomador_amount)} (0.5%)
-5. Associação (${associationName}): ${formatBR(payment.entity_amount)} (0.5%)
+5. Associação: ${formatBR(payment.entity_amount)} (0.5%)
 6. Prêmio Trabalhador: ${formatBR(payment.prize_worker_amount)} (0.5%)
 7. Prêmio Consumidor: ${formatBR(payment.prize_consumer_amount)} (0.5%)
 ----------------------------------------
-✅ *TOTAL 7 VIAS CONCILIADO:* ${formatBR(payment.total_amount)} (100.0%)
-🔒 *Autenticação Criptográfica:* UBT-FIN-${payment.id.slice(0, 8)}
+✅ *TOTAL: ${formatBR(payment.total_amount)} (100.0%)*
+🔒 *Autenticação Criptográfica:* UBT-FIN-${payment.id.slice(0, 8).toUpperCase()}
 ----------------------------------------
-_UBT - União dos Bairros Trabalhadores_`;
+_UBT - O Superapp do Trabalhador_`;
   };
 
   const handleCopyReceipt = () => {
@@ -252,7 +256,7 @@ _UBT - União dos Bairros Trabalhadores_`;
       <div className="p-8 min-h-screen bg-zinc-950 text-zinc-100">
         <button
           onClick={() => navigate("/admin/payments")}
-          className="flex items-center gap-2 text-zinc-400 hover:text-zinc-200 transition-colors mb-6 font-medium text-sm"
+          className="flex items-center gap-2 text-zinc-400 hover:text-zinc-200 transition-colors mb-6 font-medium text-sm cursor-pointer"
         >
           <ArrowLeft size={16} /> Voltar para Pagamentos
         </button>
@@ -311,7 +315,7 @@ _UBT - União dos Bairros Trabalhadores_`;
     },
     {
       index: 5,
-      name: `Associação / Fundo Social (${associationName})`,
+      name: "Associação",
       targetId: payment.entity_id || "caixinha-mototaxista-sem-associação",
       pct: 0.5,
       amount: payment.entity_amount,
@@ -344,7 +348,48 @@ _UBT - União dos Bairros Trabalhadores_`;
   const totalSplitSum = splitRows.reduce((acc, row) => acc + row.amount, 0);
 
   return (
-    <div className="p-6 md:p-8 min-h-screen bg-[#0B132B] text-zinc-100 font-sans">
+    <div className="p-4 sm:p-6 md:p-8 min-h-screen bg-[#0B132B] text-zinc-100 font-sans print:p-0 print:bg-white print:text-black">
+      {/* Global media print style overrides */}
+      <style>{`
+        @media print {
+          aside, nav, [data-sidebar], .admin-sidebar, header, .print\\:hidden, #admin-sidebar {
+            display: none !important;
+          }
+          body, html, #root, main, .admin-content, .admin-layout {
+            background: #ffffff !important;
+            color: #000000 !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            min-height: auto !important;
+          }
+          @page {
+            size: A4 portrait;
+            margin: 10mm 15mm;
+          }
+          .print-receipt-full {
+            display: block !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            background: #ffffff !important;
+            color: #000000 !important;
+            border: 1px solid #000000 !important;
+            box-shadow: none !important;
+            padding: 24px !important;
+            page-break-inside: avoid;
+          }
+          .print-split-table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+          }
+          .print-split-table th, .print-split-table td {
+            border-bottom: 1px solid #cbd5e1 !important;
+            color: #000000 !important;
+            padding: 6px 8px !important;
+          }
+        }
+      `}</style>
+
       {/* Top Header & Navigation */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 print:hidden">
         <div>
@@ -405,7 +450,7 @@ _UBT - União dos Bairros Trabalhadores_`;
       </div>
 
       {/* Main KPI Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 print:hidden">
         <Card className="p-5 bg-zinc-900/90 border border-zinc-800 rounded-2xl shadow-lg">
           <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Valor Bruto Total</span>
           <div className="text-2xl font-bold text-white mt-1">{formatBR(payment.total_amount)}</div>
@@ -435,55 +480,83 @@ _UBT - União dos Bairros Trabalhadores_`;
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-        {/* Participants & Service Info (1 col) */}
-        <Card className="p-6 bg-zinc-900/90 border border-zinc-800 rounded-2xl shadow-lg flex flex-col justify-between">
-          <div>
-            <h3 className="font-display text-lg font-bold text-white mb-4 flex items-center gap-2">
-              <User size={18} className="text-emerald-400" /> Dados do Serviço
-            </h3>
+      {/* 1. DADOS DO SERVIÇO (Card ocupando largura total com 3 colunas internas) */}
+      <div className="w-full mb-6 print:hidden">
+        <Card className="w-full p-6 bg-zinc-900/90 border border-zinc-800 rounded-2xl shadow-lg">
+          <h3 className="font-display text-lg font-bold text-white mb-5 flex items-center gap-2 border-b border-zinc-800 pb-3">
+            <User size={18} className="text-emerald-400" /> Dados do Serviço & Participantes
+          </h3>
 
-            <div className="space-y-3.5 text-sm">
-              <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
+            {/* Coluna 1: Informações da Corrida / Serviço */}
+            <div className="space-y-3 bg-zinc-950/40 p-4 rounded-xl border border-zinc-800/60">
+              <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider block mb-2">
+                Especificação do Serviço
+              </span>
+              <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/60">
                 <span className="text-zinc-400">Modalidade:</span>
                 <span className="font-semibold text-white capitalize">{payment.service_type}</span>
               </div>
+              <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/60">
+                <span className="text-zinc-400">Tipo de Corrida:</span>
+                <span className="font-semibold text-zinc-200 capitalize">{service?.type || "Carona"}</span>
+              </div>
+              <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/60">
+                <span className="text-zinc-400">Distância Estimada:</span>
+                <span className="font-semibold text-zinc-200">{service?.distance_km ? `${service.distance_km} km` : "2.4 km"}</span>
+              </div>
+              <div className="flex justify-between items-center py-1.5">
+                <span className="text-zinc-400">Tempo Estimado:</span>
+                <span className="font-semibold text-zinc-200">{service?.duration_min ? `${service.duration_min} min` : "7 min"}</span>
+              </div>
+            </div>
 
-              <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+            {/* Coluna 2: Pessoas Envolvidas */}
+            <div className="space-y-3 bg-zinc-950/40 p-4 rounded-xl border border-zinc-800/60">
+              <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider block mb-2">
+                Partes Envolvidas
+              </span>
+              <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/60">
                 <span className="text-zinc-400">Tomador (Cliente):</span>
                 <span className="font-semibold text-zinc-200">{tomador?.name || "Felipe Santander"}</span>
               </div>
-
-              <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+              <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/60">
                 <span className="text-zinc-400">Prestador (Motorista):</span>
                 <span className="font-semibold text-emerald-400">{prestador?.name || "Silvina Luz"}</span>
               </div>
-
-              <div className="flex justify-between items-center py-2 border-b border-zinc-800">
+              <div className="flex justify-between items-center py-1.5">
                 <span className="text-zinc-400">Associação Vinculada:</span>
                 <span className="font-semibold text-zinc-300 text-right">{associationName}</span>
               </div>
+            </div>
 
-              <div className="flex justify-between items-center py-2 border-b border-zinc-800">
-                <span className="text-zinc-400">Data de Criação:</span>
-                <span className="text-zinc-300">{new Date(payment.created_at).toLocaleString("pt-BR")}</span>
+            {/* Coluna 3: Auditoria & Timestamps */}
+            <div className="space-y-3 bg-zinc-950/40 p-4 rounded-xl border border-zinc-800/60 flex flex-col justify-between">
+              <div>
+                <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider block mb-2">
+                  Registro & Liquidação
+                </span>
+                <div className="flex justify-between items-center py-1.5 border-b border-zinc-800/60">
+                  <span className="text-zinc-400">Data de Criação:</span>
+                  <span className="text-zinc-300">{new Date(payment.created_at).toLocaleString("pt-BR")}</span>
+                </div>
+                <div className="flex justify-between items-center py-1.5">
+                  <span className="text-zinc-400">Data de Liquidação:</span>
+                  <span className="text-zinc-300">{new Date(payment.updated_at).toLocaleString("pt-BR")}</span>
+                </div>
               </div>
-
-              <div className="flex justify-between items-center py-2">
-                <span className="text-zinc-400">Data de Liquidação:</span>
-                <span className="text-zinc-300">{new Date(payment.updated_at).toLocaleString("pt-BR")}</span>
+              <div className="p-2.5 bg-zinc-900/80 rounded-lg border border-zinc-800 text-[11px] text-zinc-400 flex items-center gap-2">
+                <ShieldCheck size={15} className="text-emerald-400 shrink-0" />
+                <span>Auditoria garantida em <code>financial_audit_logs</code>.</span>
               </div>
             </div>
           </div>
-
-          <div className="mt-6 p-3 bg-zinc-950/60 rounded-xl border border-zinc-800/80 text-xs text-zinc-400 flex items-center gap-2">
-            <ShieldCheck size={16} className="text-emerald-400 shrink-0" />
-            <span>Transação auditada e registrada em <code>financial_audit_logs</code>.</span>
-          </div>
         </Card>
+      </div>
 
-        {/* 7-Way Split Distribution Table (2 cols) */}
-        <Card className="lg:col-span-2 p-6 bg-zinc-900/90 border border-zinc-800 rounded-2xl shadow-lg">
+      {/* 2. DISTRIBUIÇÃO DE SPLIT UBT (7 VIAS) (Card ocupando largura total w-full) */}
+      <div className="w-full mb-6 print:hidden">
+        <Card className="w-full p-6 bg-zinc-900/90 border border-zinc-800 rounded-2xl shadow-lg">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-display text-lg font-bold text-white flex items-center gap-2">
@@ -493,7 +566,7 @@ _UBT - União dos Bairros Trabalhadores_`;
             </div>
             <div className="text-right">
               <span className="text-xs text-zinc-400">Soma das 7 vias:</span>
-              <span className="ml-2 font-bold text-emerald-400">{formatBR(totalSplitSum)}</span>
+              <span className="ml-2 font-bold text-emerald-400 text-base">{formatBR(totalSplitSum)}</span>
             </div>
           </div>
 
@@ -564,62 +637,73 @@ _UBT - União dos Bairros Trabalhadores_`;
         </Card>
       </div>
 
-      {/* Visual Official Printable Receipt */}
-      <Card className="p-6 md:p-8 bg-zinc-900/90 border border-zinc-800 rounded-2xl shadow-xl max-w-3xl mx-auto print:border-none print:shadow-none print:bg-white print:text-black">
-        <div className="flex items-center justify-between pb-6 border-b border-zinc-800 print:border-black">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-bold text-lg font-display">
-              UBT
+      {/* 3. COMPROVANTE DE TRANSAÇÃO & REPASSE (Card ocupando largura total w-full) */}
+      <div className="w-full">
+        <Card className="w-full p-6 md:p-8 bg-zinc-900/90 border border-zinc-800 rounded-2xl shadow-xl print-receipt-full print:border-black print:p-6 print:bg-white print:text-black">
+          <div className="flex items-center justify-between pb-6 border-b border-zinc-800 print:border-black">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-bold text-lg font-display">
+                UBT
+              </div>
+              <div>
+                <h4 className="font-display font-bold text-lg text-white print:text-black">Comprovante de Transação & Repasse</h4>
+                <p className="text-xs text-zinc-400 print:text-zinc-600">UBT - O Superapp do Trabalhador • Ubatuba / SP</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="text-xs text-zinc-400 print:text-zinc-600">Código de Autenticação:</span>
+              <div className="font-mono text-sm font-bold text-emerald-400 print:text-black">UBT-FIN-{payment.id.slice(0, 8).toUpperCase()}</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-6 border-b border-zinc-800 print:border-black text-sm">
+            <div>
+              <span className="text-xs text-zinc-400 print:text-zinc-600 block">Data/Hora:</span>
+              <span className="font-medium text-zinc-200 print:text-black">{new Date(payment.created_at).toLocaleString("pt-BR")}</span>
             </div>
             <div>
-              <h4 className="font-display font-bold text-lg text-white print:text-black">Comprovante de Transação & Repasse</h4>
-              <p className="text-xs text-zinc-400 print:text-zinc-600">União dos Bairros Trabalhadores • Ubatuba / SP</p>
+              <span className="text-xs text-zinc-400 print:text-zinc-600 block">Tomador:</span>
+              <span className="font-medium text-zinc-200 print:text-black">{tomador?.name || "Felipe Santander"}</span>
+            </div>
+            <div>
+              <span className="text-xs text-zinc-400 print:text-zinc-600 block">Prestador:</span>
+              <span className="font-medium text-zinc-200 print:text-black">{prestador?.name || "Silvina Luz"}</span>
+            </div>
+            <div>
+              <span className="text-xs text-zinc-400 print:text-zinc-600 block">Valor Bruto:</span>
+              <span className="font-bold text-emerald-400 print:text-black text-base">{formatBR(payment.total_amount)}</span>
             </div>
           </div>
-          <div className="text-right">
-            <span className="text-xs text-zinc-400 print:text-zinc-600">Código de Autenticação:</span>
-            <div className="font-mono text-sm font-bold text-emerald-400 print:text-black">UBT-FIN-{payment.id.slice(0, 8).toUpperCase()}</div>
-          </div>
-        </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 py-6 border-b border-zinc-800 print:border-black text-sm">
-          <div>
-            <span className="text-xs text-zinc-400 print:text-zinc-600 block">Data/Hora:</span>
-            <span className="font-medium text-zinc-200 print:text-black">{new Date(payment.created_at).toLocaleString("pt-BR")}</span>
+          <div className="py-5">
+            <h5 className="text-xs font-semibold text-zinc-400 print:text-zinc-600 uppercase tracking-wider mb-3">
+              Detalhamento dos Repasses (7 Vias)
+            </h5>
+            <div className="space-y-2 text-xs text-zinc-300 print:text-zinc-900">
+              {splitRows.map((r) => (
+                <div key={r.index} className="flex justify-between items-center py-1.5 border-b border-zinc-800/40 print:border-zinc-300">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-zinc-400 print:text-zinc-600">{r.index}.</span>
+                    <span className="font-medium">{r.name}</span>
+                    <span className="text-zinc-400 print:text-zinc-600">({r.pct.toFixed(1)}%)</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono font-bold text-zinc-100 print:text-black">{formatBR(r.amount)}</span>
+                    <span className="print:inline-block hidden text-[10px] uppercase font-semibold text-zinc-600 border border-zinc-400 px-1.5 rounded">
+                      {r.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-          <div>
-            <span className="text-xs text-zinc-400 print:text-zinc-600 block">Tomador:</span>
-            <span className="font-medium text-zinc-200 print:text-black">{tomador?.name || "Felipe Santander"}</span>
-          </div>
-          <div>
-            <span className="text-xs text-zinc-400 print:text-zinc-600 block">Prestador:</span>
-            <span className="font-medium text-zinc-200 print:text-black">{prestador?.name || "Silvina Luz"}</span>
-          </div>
-          <div>
-            <span className="text-xs text-zinc-400 print:text-zinc-600 block">Valor Bruto:</span>
-            <span className="font-bold text-emerald-400 print:text-black text-base">{formatBR(payment.total_amount)}</span>
-          </div>
-        </div>
 
-        <div className="py-4">
-          <h5 className="text-xs font-semibold text-zinc-400 print:text-zinc-600 uppercase tracking-wider mb-3">
-            Resumo de Liquidação das 7 Vias
-          </h5>
-          <div className="space-y-1.5 text-xs text-zinc-300 print:text-zinc-800">
-            {splitRows.map((r) => (
-              <div key={r.index} className="flex justify-between py-1 border-b border-zinc-800/40 print:border-zinc-200">
-                <span>{r.index}. {r.name} ({r.pct.toFixed(1)}%)</span>
-                <span className="font-mono font-bold text-zinc-100 print:text-black">{formatBR(r.amount)}</span>
-              </div>
-            ))}
+          <div className="pt-4 border-t-2 border-zinc-800 print:border-black flex flex-col md:flex-row items-center justify-between text-xs text-zinc-400 print:text-zinc-600 gap-2">
+            <span>Transação processada via Mercado Pago Sandbox e distribuída pela UBT Finance Engine.</span>
+            <span className="font-semibold text-emerald-400 print:text-black">TOTAL: {formatBR(payment.total_amount)} (100.0%) • 100% Auditado</span>
           </div>
-        </div>
-
-        <div className="pt-4 border-t border-zinc-800 print:border-black flex flex-col md:flex-row items-center justify-between text-xs text-zinc-400 print:text-zinc-600 gap-2">
-          <span>Transação processada via Mercado Pago Sandbox e distribuída pela UBT Finance Engine.</span>
-          <span className="font-semibold text-emerald-400 print:text-black">100% Auditado</span>
-        </div>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }

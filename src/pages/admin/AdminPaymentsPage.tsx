@@ -237,7 +237,7 @@ export default function AdminPaymentsPage() {
                 {paged.map((p) => (
                   <tr
                     key={p.id}
-                    onClick={() => navigate(`/admin/payments/${p.id}`)}
+                    onClick={() => window.open(`/admin/payments/${p.id}`, "_blank", "noopener,noreferrer")}
                     className="hover:bg-zinc-800/40 transition-colors cursor-pointer"
                   >
                     <td className="py-3.5 px-4">
@@ -265,12 +265,14 @@ export default function AdminPaymentsPage() {
                     </td>
                     <td className="py-3.5 px-4 text-center">{getStatusPill(p.status)}</td>
                     <td className="py-3.5 px-4 text-center" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => navigate(`/admin/payments/${p.id}`)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-emerald-600 text-zinc-100 hover:text-white border border-zinc-700 hover:border-emerald-500 font-semibold text-xs transition-all cursor-pointer"
+                      <a
+                        href={`/admin/payments/${p.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-emerald-600 text-zinc-100 hover:text-white border border-zinc-700 hover:border-emerald-500 font-semibold text-xs transition-all cursor-pointer no-underline"
                       >
                         Ver Detalhes <ArrowRight size={13} />
-                      </button>
+                      </a>
                     </td>
                   </tr>
                 ))}
