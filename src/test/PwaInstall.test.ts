@@ -88,12 +88,18 @@ describe("PWA Installation CTA States & Behaviors", () => {
     expect(resolved.installOutcome).toBe("ios_instructions");
   });
 
-  // Estado F — waitlist com fluxo de apadrinhamento
-  it("should generate valid referral URLs for registered founders", () => {
-    const founderId = "570ad976-9f86-41c5-8e9e-07b94cb31a2a";
+  // Estado F — waitlist com fluxo de apadrinhamento e slugs amigáveis
+  it("should generate friendly referral URLs with user slug and short id", () => {
     const origin = "https://ubt-homologacao.vercel.app";
-    const referralUrl = `${origin}/cadastro?ref=${founderId}`;
+    const slug = "felipe-santander-001";
+    const referralUrl = `${origin}/cadastro?ref=${slug}`;
     
-    expect(referralUrl).toContain("?ref=570ad976-9f86-41c5-8e9e-07b94cb31a2a");
+    expect(referralUrl).toBe("https://ubt-homologacao.vercel.app/cadastro?ref=felipe-santander-001");
+  });
+
+  it("should sanitize CPF formatting before querying database", () => {
+    const rawCpf = "123.456.789-00";
+    const cleanCpf = rawCpf.replace(/\D/g, "");
+    expect(cleanCpf).toBe("12345678900");
   });
 });

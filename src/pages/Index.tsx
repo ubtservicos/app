@@ -34,7 +34,7 @@ import { usePwaInstall } from "@/hooks/usePwaInstall";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { maskPhone } from "@/utils/masks";
+import { maskPhone, generateReferralSlug } from "@/utils/masks";
 import WelcomeFundadorModal from "@/components/WelcomeFundadorModal";
 import JaSouFundadorModal from "@/components/JaSouFundadorModal";
 import IosInstallModal from "@/components/IosInstallModal";
@@ -464,7 +464,7 @@ export default function Index() {
   const [submitError, setSubmitError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
-  const [registeredUser, setRegisteredUser] = useState<{ id?: string; nome: string; email: string } | null>(null);
+  const [registeredUser, setRegisteredUser] = useState<{ id?: string; nome: string; email: string; referral_code?: string } | null>(null);
 
   const [isBairroModalOpen, setIsBairroModalOpen] = useState(false);
   const [isPraiaModalOpen, setIsPraiaModalOpen] = useState(false);
@@ -850,10 +850,16 @@ export default function Index() {
 
       console.log("[Waitlist] Cadastro realizado com sucesso:", insertData);
 
-      const insertedId = insertData && insertData[0] ? insertData[0].id : undefined;
+      const insertedRow = insertData && insertData[0] ? insertData[0] : null;
+      const refCode = insertedRow?.referral_code || generateReferralSlug(values.nome.trim(), insertedRow?.id);
 
       setSubmitSuccess(true);
-      setRegisteredUser({ id: insertedId, nome: values.nome.trim(), email: values.email.trim() });
+      setRegisteredUser({
+        id: insertedRow?.id,
+        nome: values.nome.trim(),
+        email: values.email.trim(),
+        referral_code: refCode,
+      });
       setShowWelcomeModal(true);
       trackEvent("landing_waitlist_success", "marketing", { perfil: values.perfil });
       logSystem("INFO", "WAITLIST", "founder_signup_success", "success");
@@ -1488,23 +1494,30 @@ export default function Index() {
                   <span>Seu Link Exclusivo de Indicação:</span>
                 </div>
                 <p className="text-[11px] text-white/60 font-sans leading-relaxed">
-                  Ganhe até <strong>1% de comissão</strong> nas corridas e serviços concluídos pelas pessoas que você indicar, além de concorrer aos prêmios dos Fundos UBT!
+                  Ganhe <strong>0,5% de comissão</strong> nas corridas e serviços concluídos pelas pessoas que você indicar, além de concorrer aos prêmios dos Fundos UBT!
                 </p>
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
                     readOnly
-                    value={registeredUser?.id ? `${window.location.origin}/cadastro?ref=${registeredUser.id}` : `${window.location.origin}/cadastro`}
+                    value={
+                      registeredUser?.referral_code
+                        ? `${window.location.origin}/cadastro?ref=${registeredUser.referral_code}`
+                        : registeredUser?.id
+                        ? `${window.location.origin}/cadastro?ref=${generateReferralSlug(registeredUser.nome, registeredUser.id)}`
+                        : `${window.location.origin}/cadastro`
+                    }
                     className="w-full px-3.5 py-2.5 rounded-xl bg-black/60 border border-white/10 text-white/90 text-xs font-mono select-all outline-none"
                   />
                   <button
                     type="button"
                     onClick={() => {
-                      const link = registeredUser?.id ? `${window.location.origin}/cadastro?ref=${registeredUser.id}` : `${window.location.origin}/cadastro`;
+                      const refCode = registeredUser?.referral_code || generateReferralSlug(registeredUser?.nome, registeredUser?.id);
+                      const link = refCode ? `${window.location.origin}/cadastro?ref=${refCode}` : `${window.location.origin}/cadastro`;
                       navigator.clipboard.writeText(link);
                       setCopiedReferral(true);
                       setTimeout(() => setCopiedReferral(false), 3000);
-                      trackEvent("waitlist_success_referral_copy", "marketing", { id: registeredUser?.id });
+                      trackEvent("waitlist_success_referral_copy", "marketing", { id: registeredUser?.id, refCode });
                     }}
                     className="px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-display font-bold text-xs flex items-center gap-1.5 transition-all shrink-0 border border-white/10 cursor-pointer active:scale-95"
                   >
@@ -1523,7 +1536,13 @@ export default function Index() {
                 </div>
                 <a
                   href={`https://api.whatsapp.com/send?text=${encodeURIComponent(
-                    `🚀 Olá! Conheça a UBT, a plataforma que conecta prestadores de serviço locais com taxas justas em Ubatuba.\n\nCadastre-se como pioneiro(a) pelo meu link exclusivo de fundador e garanta benefícios:\n${registeredUser?.id ? `${window.location.origin}/cadastro?ref=${registeredUser.id}` : `${window.location.origin}/cadastro`}`
+                    `🚀 Olá! Conheça a UBT, a plataforma que conecta prestadores de serviço locais com taxas justas em Ubatuba.\n\nCadastre-se como pioneiro(a) pelo meu link exclusivo de fundador e garanta benefícios:\n${
+                      registeredUser?.referral_code
+                        ? `${window.location.origin}/cadastro?ref=${registeredUser.referral_code}`
+                        : registeredUser?.id
+                        ? `${window.location.origin}/cadastro?ref=${generateReferralSlug(registeredUser.nome, registeredUser.id)}`
+                        : `${window.location.origin}/cadastro`
+                    }`
                   )}`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -2249,6 +2268,7 @@ export default function Index() {
         userName={registeredUser?.nome}
         userEmail={registeredUser?.email}
         userId={registeredUser?.id}
+        referralCode={registeredUser?.referral_code}
         ctaText="Concluir"
         onCtaClick={() => {
           setShowWelcomeModal(false);

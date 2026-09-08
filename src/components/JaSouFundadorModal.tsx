@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { trackEvent } from "@/services/AnalyticsService";
+import { maskCPF, generateReferralSlug } from "@/utils/masks";
 
 interface JaSouFundadorModalProps {
   isOpen: boolean;
@@ -27,6 +28,7 @@ interface FounderData {
   nome: string;
   email?: string;
   telefone?: string;
+  referral_code?: string;
 }
 
 export default function JaSouFundadorModal({
@@ -42,23 +44,43 @@ export default function JaSouFundadorModal({
 
   if (!isOpen) return null;
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawVal = e.target.value;
+    if (errorMsg) setErrorMsg("");
+
+    const onlyDigits = rawVal.replace(/\D/g, "");
+    const hasLetters = /[a-zA-Z]/.test(rawVal);
+    const isEmailLike = rawVal.includes("@") || hasLetters;
+
+    if (!isEmailLike && onlyDigits.length > 0) {
+      setIdentificador(maskCPF(rawVal));
+    } else {
+      setIdentificador(rawVal);
+    }
+  };
+
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    const query = identificador.trim();
-    if (!query) {
+    const rawQuery = identificador.trim();
+    if (!rawQuery) {
       setErrorMsg("Informe seu e-mail ou CPF para localizar seu cadastro.");
       return;
     }
+
+    // Sanitização estrita antes da busca: remove pontos, traços e caracteres especiais se não for email
+    const isEmail = rawQuery.includes("@");
+    const sanitizedQuery = isEmail ? rawQuery.toLowerCase() : rawQuery.replace(/\D/g, "");
+    const queryForSearch = sanitizedQuery.length > 0 ? sanitizedQuery : rawQuery;
 
     setLoading(true);
     setErrorMsg("");
     setFounder(null);
 
     try {
-      // 1. Tentar chamar a RPC buscar_fundador_identificador
+      // 1. Tentar chamar a RPC buscar_fundador_identificador com o valor sanitizado
       const { data: rpcData, error: rpcError } = await supabase.rpc(
         "buscar_fundador_identificador",
-        { p_identificador: query }
+        { p_identificador: queryForSearch }
       );
 
       if (!rpcError && rpcData && rpcData.length > 0) {
@@ -67,6 +89,7 @@ export default function JaSouFundadorModal({
           id: found.id,
           nome: found.nome || "Fundador(a)",
           email: found.email || "",
+          referral_code: found.referral_code || generateReferralSlug(found.nome, found.id),
         });
         trackEvent("founder_lookup_success", "marketing", { id: found.id });
         setLoading(false);
@@ -74,17 +97,17 @@ export default function JaSouFundadorModal({
       }
 
       // 2. Fallback caso a RPC não retorne nada: busca direta em waitlist ou profiles
-      const cleanDoc = query.replace(/\D/g, "");
-      const cleanEmail = query.toLowerCase();
+      const cleanDoc = rawQuery.replace(/\D/g, "");
+      const cleanEmail = rawQuery.toLowerCase();
 
-      let directQuery = supabase.from("waitlist").select("id, nome, email, telefone");
+      let directQuery = supabase.from("waitlist").select("id, nome, email, telefone, referral_code");
 
       if (cleanEmail.includes("@")) {
         directQuery = directQuery.ilike("email", cleanEmail);
       } else if (cleanDoc.length >= 8) {
         directQuery = directQuery.ilike("telefone", `%${cleanDoc}%`);
       } else {
-        directQuery = directQuery.ilike("nome", `%${query}%`);
+        directQuery = directQuery.or(`referral_code.ilike.%${rawQuery}%,nome.ilike.%${rawQuery}%`);
       }
 
       const { data: waitlistData, error: waitlistError } = await directQuery.limit(1);
@@ -96,6 +119,7 @@ export default function JaSouFundadorModal({
           nome: item.nome || "Fundador(a)",
           email: item.email || "",
           telefone: item.telefone || "",
+          referral_code: item.referral_code || generateReferralSlug(item.nome, item.id),
         });
         trackEvent("founder_lookup_success", "marketing", { id: item.id });
         setLoading(false);
@@ -106,7 +130,7 @@ export default function JaSouFundadorModal({
       if (cleanDoc.length >= 10) {
         const { data: profileData } = await supabase
           .from("profiles")
-          .select("id, name, cpf, phone")
+          .select("id, name, cpf, phone, referral_code")
           .or(`cpf.eq.${cleanDoc},phone.ilike.%${cleanDoc}%`)
           .limit(1);
 
@@ -115,6 +139,7 @@ export default function JaSouFundadorModal({
           setFounder({
             id: item.id,
             nome: item.name || "Fundador(a)",
+            referral_code: item.referral_code || generateReferralSlug(item.name, item.id),
           });
           trackEvent("founder_lookup_success", "marketing", { id: item.id });
           setLoading(false);
@@ -126,7 +151,7 @@ export default function JaSouFundadorModal({
       setErrorMsg(
         "Não encontramos nenhum cadastro com este e-mail ou CPF. Verifique os dados ou faça sua inscrição pioneira!"
       );
-      trackEvent("founder_lookup_not_found", "marketing", { query });
+      trackEvent("founder_lookup_not_found", "marketing", { query: rawQuery });
     } catch (err: any) {
       console.error("Erro na busca de fundador:", err);
       setErrorMsg("Ocorreu um erro ao consultar seus dados. Tente novamente.");
@@ -138,7 +163,8 @@ export default function JaSouFundadorModal({
   const getReferralUrl = () => {
     if (!founder) return "";
     const origin = typeof window !== "undefined" ? window.location.origin : "https://ubt-homologacao.vercel.app";
-    return `${origin}/cadastro?ref=${founder.id}`;
+    const refCode = founder.referral_code || generateReferralSlug(founder.nome, founder.id);
+    return `${origin}/cadastro?ref=${refCode}`;
   };
 
   const handleCopyLink = () => {
@@ -160,6 +186,13 @@ export default function JaSouFundadorModal({
     onClose();
     if (onRegisterClick) {
       onRegisterClick();
+    } else {
+      const el = document.getElementById("cadastro-fundadores-cap") || document.getElementById("fundadores-cap");
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else if (typeof window !== "undefined") {
+        window.location.href = "/#cadastro-fundadores-cap";
+      }
     }
   };
 
@@ -217,10 +250,7 @@ export default function JaSouFundadorModal({
                     id="founder-identificador"
                     type="text"
                     value={identificador}
-                    onChange={(e) => {
-                      setIdentificador(e.target.value);
-                      if (errorMsg) setErrorMsg("");
-                    }}
+                    onChange={handleInputChange}
                     placeholder="Digite seu e-mail ou CPF cadastrado"
                     className="w-full pl-4 pr-11 py-4 rounded-2xl bg-white/5 border border-white/10 focus:border-green text-white text-sm outline-none transition-all placeholder:text-white/30 font-sans"
                     autoFocus
@@ -294,14 +324,14 @@ export default function JaSouFundadorModal({
               Você já faz parte do grupo de fundadores da UBT. Comece agora mesmo a indicar novos prestadores e tomadores para receber recompensas a cada transação!
             </p>
 
-            {/* Rules card */}
+            {/* Rules card with 0,5% */}
             <div className="w-full p-4 rounded-2xl bg-white/5 border border-white/10 mb-5 text-left flex flex-col gap-2">
               <div className="flex items-center gap-2 text-xs font-bold text-white">
                 <Users className="w-4 h-4 text-green" />
                 <span>Programa Padrinho & Madrinha</span>
               </div>
               <p className="text-[11px] text-white/60 leading-relaxed font-sans">
-                A cada corrida ou serviço concluído pelas pessoas cadastradas pelo seu link, você recebe até <strong>1% de comissão</strong> direta, além de concorrer aos prêmios anuais dos Fundos UBT.
+                A cada corrida ou serviço concluído pelas pessoas cadastradas pelo seu link, você recebe <strong>0,5% de comissão</strong> direta, além de concorrer aos prêmios anuais dos Fundos UBT.
               </p>
             </div>
 

@@ -39,3 +39,18 @@ export const maskCNPJ = (v: string) =>
     .replace(/(\d{4})(\d{1,2})/, "$1-$2")
     .slice(0, 18);
 
+export const generateReferralSlug = (name?: string, id?: string): string => {
+  if (!name && !id) return "fundador-ubt";
+  const cleanName = (name || "fundador")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
+  
+  const shortId = id ? id.replace(/-/g, "").slice(-3) : "001";
+  return `${cleanName || "fundador"}-${shortId}`;
+};
+

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import Confetti from "react-confetti";
 import { Sparkles, ArrowRight, ShieldCheck, Award, Share2, Copy, Check, Users } from "lucide-react";
 import { trackEvent } from "@/services/AnalyticsService";
+import { generateReferralSlug } from "@/utils/masks";
 
 interface WelcomeFundadorModalProps {
   isOpen: boolean;
@@ -9,6 +10,7 @@ interface WelcomeFundadorModalProps {
   userName?: string;
   userEmail?: string;
   userId?: string;
+  referralCode?: string;
   ctaText?: string;
   onCtaClick?: () => void;
 }
@@ -19,6 +21,7 @@ export default function WelcomeFundadorModal({
   userName,
   userEmail,
   userId,
+  referralCode,
   ctaText = "Concluir",
   onCtaClick,
 }: WelcomeFundadorModalProps) {
@@ -70,13 +73,14 @@ export default function WelcomeFundadorModal({
 
   const displayName = userName ? userName.split(" ")[0] : "";
   const origin = typeof window !== "undefined" ? window.location.origin : "https://ubt-homologacao.vercel.app";
-  const referralUrl = userId ? `${origin}/cadastro?ref=${userId}` : `${origin}/#cadastro-fundadores-cap`;
+  const slug = referralCode || generateReferralSlug(userName, userId);
+  const referralUrl = slug ? `${origin}/cadastro?ref=${slug}` : `${origin}/#cadastro-fundadores-cap`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(referralUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 3000);
-    trackEvent("welcome_modal_referral_copy", "marketing", { userId });
+    trackEvent("welcome_modal_referral_copy", "marketing", { userId, slug });
   };
 
   const whatsAppMessage = `🚀 Olá! Conheça a UBT, a plataforma que conecta prestadores de serviço locais com taxas justas em Ubatuba.\n\nCadastre-se como pioneiro(a) pelo meu link exclusivo de fundador e garanta benefícios:\n${referralUrl}`;
