@@ -34,7 +34,8 @@ import {
   Truck,
   Send,
   Bike,
-  ShoppingBag
+  ShoppingBag,
+  Utensils
 } from "lucide-react";
 import { AdminToastProvider } from "@/components/admin/AdminToast";
 import { supabase } from "@/lib/supabase";
@@ -63,17 +64,19 @@ export const COCO_NAV_ITEMS = [
 ];
 
 export const DIARISTAS_NAV_ITEMS = [
-  { icon: Sparkles, label: "Gestão & Materiais", path: "/admin/diaristas", roles: ["operator", "admin", "super_admin"] },
+  { icon: LayoutDashboard, label: "Dashboard", path: "/admin/diaristas/dashboard", roles: ["operator", "admin", "super_admin"] },
+  { icon: Sparkles, label: "Gestão de Materiais", path: "/admin/diaristas/materiais", roles: ["operator", "admin", "super_admin"] },
 ];
 
 export const MOTOTAXI_NAV_ITEMS = [
-  { icon: Bike, label: "Painel & Corridas", path: "/app/prestador/mototaxi/online", roles: ["operator", "admin", "super_admin"] },
+  { icon: LayoutDashboard, label: "Dashboard", path: "/admin/mototaxistas/dashboard", roles: ["operator", "admin", "super_admin"] },
   { icon: Clock, label: "KYC Mototaxistas", path: "/admin/kyc-pendentes", roles: ["operator", "admin", "super_admin"] },
 ];
 
 export const AMBULANTES_NAV_ITEMS = [
+  { icon: LayoutDashboard, label: "Dashboard", path: "/admin/ambulantes/dashboard", roles: ["operator", "admin", "super_admin"] },
+  { icon: Utensils, label: "Cardápios Padrão", path: "/admin/ambulantes/cardapios", roles: ["operator", "admin", "super_admin"] },
   { icon: ShoppingBag, label: "Catálogo de Produtos", path: "/app/ambulantes", roles: ["operator", "admin", "super_admin"] },
-  { icon: Users, label: "Gestão de Pedidos", path: "/app/prestador/ambulantes/online", roles: ["operator", "admin", "super_admin"] },
 ];
 
 export const NAV_ITEMS = [
@@ -102,7 +105,6 @@ export const NAV_ITEMS = [
   { icon: Zap, label: "Preço Dinâmico", path: "/admin/preco", roles: ["operator", "admin", "super_admin"] },
   { icon: Scale, label: "Arbitragem", path: "/admin/arbitragem", roles: ["moderador", "admin", "super_admin"] },
   { icon: Megaphone, label: "Conteúdo", path: "/admin/conteudo", roles: ["operator", "admin", "super_admin"] },
-  { icon: Sparkles, label: "Diaristas", path: "/admin/diaristas", roles: ["operator", "admin", "super_admin"] },
   { icon: Send, label: "Mensageria", path: "/admin/mensageria", roles: ["admin", "super_admin", "superadmin"] },
   { icon: ShieldAlert, label: "Aprovações Pendentes", path: "/app/admin/aprovacoes", roles: ["admin", "super_admin"] },
   { icon: BookOpen, label: "Wiki / Conhecimento", path: "/app/admin/wiki", roles: ["operator", "operations_manager", "financeiro", "moderador", "admin", "super_admin"] },
@@ -218,9 +220,9 @@ const Sidebar = ({ onItemClick }: { onItemClick?: () => void }) => {
     else if (financeiroItems.some(item => pathname === item.path)) initial.financeiro = true;
     else if (complianceItems.some(item => pathname === item.path)) initial.compliance = true;
     else if (sistemaItems.some(item => pathname === item.path)) initial.sistema = true;
-    else if (diaristasItems.some(item => pathname === item.path)) initial.diaristas = true;
-    else if (mototaxiItems.some(item => pathname === item.path)) initial.mototaxi = true;
-    else if (ambulantesItems.some(item => pathname === item.path)) initial.ambulantes = true;
+    else if (diaristasItems.some(item => pathname === item.path || pathname.startsWith("/admin/diaristas"))) initial.diaristas = true;
+    else if (mototaxiItems.some(item => pathname === item.path || pathname.startsWith("/admin/mototaxistas"))) initial.mototaxi = true;
+    else if (ambulantesItems.some(item => pathname === item.path || pathname.startsWith("/admin/ambulantes"))) initial.ambulantes = true;
     else if (cocoItems.some(item => pathname === item.path || pathname.startsWith("/admin/coco"))) initial.coco = true;
     else initial.painel = true;
     return initial;

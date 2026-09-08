@@ -78,6 +78,11 @@ import AdminArbitragemPage from "./pages/admin/AdminArbitragemPage.tsx";
 import AdminConteudoPage from "./pages/admin/AdminConteudoPage.tsx";
 import AdminCocoPage from "./pages/admin/AdminCocoPage.tsx";
 import AdminDiaristasPage from "./pages/admin/AdminDiaristasPage.tsx";
+import AdminDiaristasDashboardPage from "./pages/admin/AdminDiaristasDashboardPage.tsx";
+import AdminDiaristasMateriaisPage from "./pages/admin/AdminDiaristasMateriaisPage.tsx";
+import AdminMototaxistasDashboardPage from "./pages/admin/AdminMototaxistasDashboardPage.tsx";
+import AdminAmbulantesDashboardPage from "./pages/admin/AdminAmbulantesDashboardPage.tsx";
+import AdminAmbulantesCardapiosPage from "./pages/admin/AdminAmbulantesCardapiosPage.tsx";
 import AdminSorteioTrabPage from "./pages/admin/AdminSorteioTrabPage.tsx";
 import AdminSorteioConsPage from "./pages/admin/AdminSorteioConsPage.tsx";
 import AdminPaymentsPage from "./pages/admin/AdminPaymentsPage.tsx";
@@ -234,7 +239,12 @@ const App = () => (
               <Route path="/admin/coco/frota" element={adminGuard(<AdminCocoFrota />, ["operator", "admin", "super_admin", "cocoecia", "tomador", "associacao", "associacao_lider", "cocoecia-dirigentes", "cocoecia-colaborador"])} />
               <Route path="/admin/coco/colaboradores" element={adminGuard(<AdminCocoColaboradores />, ["operator", "admin", "super_admin", "cocoecia", "tomador", "associacao", "associacao_lider", "cocoecia-dirigentes", "cocoecia-colaborador"])} />
               <Route path="/admin/coco/config" element={adminGuard(<AdminCocoSettings />, ["operator", "admin", "super_admin", "cocoecia", "tomador", "associacao", "associacao_lider", "cocoecia-dirigentes", "cocoecia-colaborador"])} />
-              <Route path="/admin/diaristas" element={adminGuard(<AdminDiaristasPage />, ["operator", "admin", "super_admin"])} />
+              <Route path="/admin/diaristas" element={adminGuard(<AdminDiaristasDashboardPage />, ["operator", "admin", "super_admin"])} />
+              <Route path="/admin/diaristas/dashboard" element={adminGuard(<AdminDiaristasDashboardPage />, ["operator", "admin", "super_admin"])} />
+              <Route path="/admin/diaristas/materiais" element={adminGuard(<AdminDiaristasMateriaisPage />, ["operator", "admin", "super_admin"])} />
+              <Route path="/admin/mototaxistas/dashboard" element={adminGuard(<AdminMototaxistasDashboardPage />, ["operator", "admin", "super_admin"])} />
+              <Route path="/admin/ambulantes/dashboard" element={adminGuard(<AdminAmbulantesDashboardPage />, ["operator", "admin", "super_admin"])} />
+              <Route path="/admin/ambulantes/cardapios" element={adminGuard(<AdminAmbulantesCardapiosPage />, ["operator", "admin", "super_admin"])} />
               <Route path="/admin/mensageria" element={adminGuard(<AdminMensageriaPage />, ["admin", "super_admin", "superadmin"])} />
               <Route path="/app/admin/aprovacoes" element={adminGuard(<AdminAprovacoesPage />, ["admin", "super_admin"])} />
               <Route path="/app/admin/wiki" element={adminGuard(<AdminWikiPage />, ["operator", "operations_manager", "financeiro", "moderador", "admin", "super_admin", "kyc", "auditoria", "analytics"])} />
