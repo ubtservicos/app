@@ -132,6 +132,12 @@ const PrestadorHome = () => {
     loaded: false,
   });
 
+  const hasMototaxi = !!registeredServices.mototaxi;
+  const isMototaxiPending = user.kycStatus === "pending";
+  const hasAmbulante = !!registeredServices.ambulante;
+  const hasDiarista = !!registeredServices.diarista;
+  const hasCoco = !!registeredServices.coco;
+
   const [pedidosAmbulante, setPedidosAmbulante] = useState<any[]>([]);
   const [activeCaminhao, setActiveCaminhao] = useState<any | null>(null);
 
