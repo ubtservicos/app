@@ -20,6 +20,7 @@ import {
 import MototaxiMap from "@/components/mototaxi/MototaxiMap";
 import SplitBreakdown from "@/components/mototaxi/SplitBreakdown";
 import QuickStatusMessages from "@/components/mototaxi/QuickStatusMessages";
+import Confetti from "react-confetti";
 import { fetchGatewayFeeSettings, calculatePaymentWithFee, type GatewayFeeSettings, DEFAULT_FEE_SETTINGS } from "@/services/FinancialFeeService";
 import { calcPrice, formatBRL } from "@/utils/ride";
 import { useRide, type RideType } from "@/contexts/RideContext";
@@ -552,13 +553,18 @@ const CompletedScreen = ({
   price,
   distanceKm,
   durationMin,
+  rideId,
+  prestadorInfo,
   onPay,
 }: {
   price: number;
   distanceKm: number;
   durationMin: number;
+  rideId?: string;
+  prestadorInfo?: any;
   onPay: () => void;
 }) => {
+  const user = useCurrentUser();
   const [method, setMethod] = useState<"pix" | "card">("pix");
   const [confirming, setConfirming] = useState(false);
   const [pixSeconds, setPixSeconds] = useState(300);
@@ -627,14 +633,14 @@ const CompletedScreen = ({
         body: {
           action: "create_payment_intent",
           service_type: "mototaxi",
-          service_id: state.rideId || "00000000-0000-0000-0000-000000000001",
-          external_reference: state.rideId || undefined,
+          service_id: rideId || "00000000-0000-0000-0000-000000000001",
+          external_reference: rideId || undefined,
           transaction_amount: finalAmount,
-          provider_id: state.prestadorInfo?.id || "0a5edf64-7585-401f-b310-126529607da0",
-          provider_name: state.prestadorInfo?.name || "Silvina Luz",
-          payer_email: user.email || session?.user?.email || "felipe@exemplo.com",
-          payer_first_name: (cardHolder || user.name || "Felipe").split(" ")[0],
-          payer_last_name: (cardHolder || user.name || "Santander").split(" ").slice(1).join(" ") || "Santander",
+          provider_id: prestadorInfo?.id || "0a5edf64-7585-401f-b310-126529607da0",
+          provider_name: prestadorInfo?.name || "Silvina Luz",
+          payer_email: user?.email || "felipe@exemplo.com",
+          payer_first_name: (cardHolder || user?.name || "Felipe").split(" ")[0],
+          payer_last_name: (cardHolder || user?.name || "Santander").split(" ").slice(1).join(" ") || "Santander",
           description: `Corrida UBT Mototáxi - ${formatBRL(finalAmount)} (Split 7 Vias)`,
           payment_method_id: method === "pix" ? "pix" : "credit_card",
           card_data: method === "card" ? {
@@ -680,100 +686,106 @@ const CompletedScreen = ({
           <span>{distanceKm}km</span>
         </div>
         <div className="flex justify-between font-sans text-[14px] mt-1.5">
-          <span style={{ color: "rgba(255,255,255,0.55)" }}>Tempo</span>
+          <span style={{ color: "rgba(255,255,255,0.55)" }}>Duração aprox.</span>
           <span>{durationMin} min</span>
         </div>
         <div className="my-3 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
-        <div className="flex justify-between items-center">
-          <span className="font-display text-[14px]" style={{ color: "rgba(255,255,255,0.7)" }}>
-            Tarifa Base
-          </span>
-          <span className="font-display text-[15px] font-semibold text-white">
-            {formatBRL(feeCalc.basePrice)}
-          </span>
-        </div>
-        <div className="flex justify-between items-center mt-1.5">
-          <span className="font-sans text-[13px]" style={{ color: "rgba(255,255,255,0.55)" }}>
-            Taxa {method === 'pix' ? 'PIX' : 'Cartão'} ({feeCalc.feePct > 0 ? `${feeCalc.feePct.toFixed(2)}%` : 'Isenta'})
-          </span>
-          <span className="font-sans text-[13px] font-medium" style={{ color: feeCalc.feeAmount > 0 ? "#F5A623" : "#0DB87E" }}>
-            {feeCalc.feeAmount > 0 ? `+ ${formatBRL(feeCalc.feeAmount)}` : "Grátis"}
-          </span>
-        </div>
+        
+        {/* Dynamic Split Breakdown */}
+        <SplitBreakdown total={feeCalc.totalAmount} />
+        
         <div className="my-3 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
-        <div className="flex justify-between items-center">
-          <span className="font-display text-[14px] font-bold" style={{ color: "rgba(255,255,255,0.9)" }}>
-            Total a Pagar
-          </span>
-          <span className="font-display text-[20px] font-bold" style={{ color: "#0DB87E" }}>
-            {formatBRL(feeCalc.totalAmount)}
-          </span>
-        </div>
-        <SplitBreakdown total={feeCalc.basePrice} />
-      </div>
 
-      <h2 className="mt-6 font-display text-[16px] font-bold">Forma de pagamento</h2>
-      <div className="mt-3 grid grid-cols-2 gap-2.5">
-        {([
-          { key: "pix", label: "PIX", Icon: QrCode },
-          { key: "card", label: "Cartão", Icon: CreditCard },
-        ] as const).map(({ key, label, Icon }) => {
-          const sel = method === key;
-          return (
-            <button
-              key={key}
-              onClick={() => setMethod(key)}
-              className="rounded-xl p-3 flex items-center gap-2"
-              style={{
-                background: sel ? "rgba(13,184,126,0.10)" : "rgba(255,255,255,0.04)",
-                border: `1px solid ${sel ? "#0DB87E" : "rgba(255,255,255,0.10)"}`,
-              }}
-            >
-              <Icon size={20} style={{ color: sel ? "#0DB87E" : "rgba(255,255,255,0.6)" }} />
-              <span className="font-sans text-[14px] font-semibold text-white">{label}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      {method === "pix" ? (
-        <div className="mt-4 flex flex-col items-center">
-          {qrCodeBase64 ? (
-            <div className="bg-white rounded-lg p-3" style={{ width: 160, height: 160 }}>
-              <img src={`data:image/png;base64,${qrCodeBase64}`} alt="QR Code PIX" className="w-full h-full object-contain" />
-            </div>
-          ) : (
-            <div className="bg-white rounded-lg p-3" style={{ width: 160, height: 160 }}>
-              {/* Mock QR */}
-              <svg viewBox="0 0 10 10" className="w-full h-full">
-                {Array.from({ length: 100 }).map((_, i) => {
-                  const x = i % 10; const y = Math.floor(i / 10);
-                  const fill = (x + y * 3 + (x * y) % 5) % 2 === 0;
-                  return <rect key={i} x={x} y={y} width="1" height="1" fill={fill ? "#0B1B3E" : "#fff"} />;
-                })}
-              </svg>
+        {/* Detailed Price & Fee Display */}
+        <div className="space-y-1">
+          <div className="flex justify-between font-sans text-[13px] text-white/60">
+            <span>Tarifa base:</span>
+            <span>{formatBRL(feeCalc.baseAmount)}</span>
+          </div>
+          {feeCalc.feeAmount > 0 && (
+            <div className="flex justify-between font-sans text-[13px] text-[#F5A623]">
+              <span>Taxa gateway ({feeCalc.feePercentage}%):</span>
+              <span>+ {formatBRL(feeCalc.feeAmount)}</span>
             </div>
           )}
-          <p className="mt-3 font-display text-[20px] font-semibold" style={{ color: "#0DB87E" }}>
-            {mm}:{ss}
+          <div className="flex justify-between font-display text-[18px] font-bold text-white pt-1">
+            <span>Total a pagar</span>
+            <span style={{ color: "#0DB87E" }}>{formatBRL(feeCalc.totalAmount)}</span>
+          </div>
+        </div>
+      </div>
+
+      <p className="mt-6 font-sans text-[12px] font-semibold tracking-wider uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>
+        Forma de pagamento
+      </p>
+      <div className="mt-2 grid grid-cols-2 gap-3">
+        <button
+          onClick={() => setMethod("pix")}
+          className="rounded-2xl p-4 flex flex-col items-center justify-center transition-all"
+          style={{
+            background: method === "pix" ? "rgba(13,184,126,0.12)" : "rgba(255,255,255,0.04)",
+            border: method === "pix" ? "2px solid #0DB87E" : "1px solid rgba(255,255,255,0.08)",
+          }}
+        >
+          <QrCode size={24} style={{ color: method === "pix" ? "#0DB87E" : "rgba(255,255,255,0.7)" }} />
+          <span className="mt-2 font-display text-[14px] font-bold">PIX</span>
+          <span className="font-sans text-[11px]" style={{ color: "rgba(255,255,255,0.45)" }}>
+            Acréscimo: {feeSettings.pix_fee_percentage}%
+          </span>
+        </button>
+
+        <button
+          onClick={() => setMethod("card")}
+          className="rounded-2xl p-4 flex flex-col items-center justify-center transition-all"
+          style={{
+            background: method === "card" ? "rgba(13,184,126,0.12)" : "rgba(255,255,255,0.04)",
+            border: method === "card" ? "2px solid #0DB87E" : "1px solid rgba(255,255,255,0.08)",
+          }}
+        >
+          <CreditCard size={24} style={{ color: method === "card" ? "#0DB87E" : "rgba(255,255,255,0.7)" }} />
+          <span className="mt-2 font-display text-[14px] font-bold">Cartão de Crédito</span>
+          <span className="font-sans text-[11px]" style={{ color: "rgba(255,255,255,0.45)" }}>
+            Acréscimo: {feeSettings.credit_card_fee_percentage}%
+          </span>
+        </button>
+      </div>
+
+      {method === "pix" && (
+        <div className="mt-4 rounded-2xl p-5 flex flex-col items-center" style={{ background: "rgba(255,255,255,0.04)" }}>
+          {qrCodeBase64 ? (
+            <div className="bg-white p-2 rounded-xl mb-3 shadow-lg">
+              <img src={`data:image/png;base64,${qrCodeBase64}`} alt="QR Code PIX" className="w-44 h-44" />
+            </div>
+          ) : (
+            <div className="w-44 h-44 rounded-xl flex items-center justify-center mb-3" style={{ background: "rgba(255,255,255,0.08)" }}>
+              <QrCode size={80} style={{ color: "rgba(255,255,255,0.3)" }} />
+            </div>
+          )}
+          <p className="font-sans text-[13px] text-center" style={{ color: "rgba(255,255,255,0.7)" }}>
+            Escaneie o QR Code ou pague pelo app do seu banco
+          </p>
+          <p className="mt-1 font-mono text-[12px] font-semibold" style={{ color: "#F5A623" }}>
+            Expira em {mm}:{ss}
           </p>
         </div>
-      ) : (
-        <div className="mt-4 rounded-2xl p-4 space-y-3" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)" }}>
-          <div className="flex items-center justify-between">
-            <span className="font-sans text-[12px] font-semibold text-white/70">Dados do Cartão de Crédito</span>
+      )}
+
+      {method === "card" && (
+        <div className="mt-4 rounded-2xl p-4 bg-white/5 border border-white/10 space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-white/10">
+            <span className="font-sans text-[12px] font-semibold text-white/70">Cartão de Crédito</span>
             <div className="flex gap-1.5">
               <button
                 type="button"
                 onClick={() => applyTestCard("master")}
-                className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#0DB87E]/20 text-[#0DB87E] border border-[#0DB87E]/30"
+                className="px-2 py-0.5 rounded bg-emerald-500/20 text-[#0DB87E] text-[10px] font-mono hover:bg-emerald-500/30"
               >
                 Teste MP 1
               </button>
               <button
                 type="button"
                 onClick={() => applyTestCard("visa")}
-                className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#2B6EE8]/20 text-[#2B6EE8] border border-[#2B6EE8]/30"
+                className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 text-[10px] font-mono hover:bg-blue-500/30"
               >
                 Teste MP 2
               </button>
@@ -857,7 +869,8 @@ const CompletedScreen = ({
       )}
 
       {confirming && (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center" style={{ background: "rgba(11,27,62,0.95)" }}>
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center relative overflow-hidden" style={{ background: "rgba(11,27,62,0.95)" }}>
+          <Confetti numberOfPieces={200} recycle={false} />
           <CheckCircle2 size={80} style={{ color: "#0DB87E", animation: "ubt-scale-in 400ms ease-out" }} />
           <p className="mt-4 font-display text-[20px] font-bold text-white">Pagamento confirmado!</p>
         </div>
@@ -878,11 +891,24 @@ const RatingScreen = ({
   const [done, setDone] = useState(false);
   const [comment, setComment] = useState("");
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (done) {
+      const timer = setTimeout(() => {
+        onSubmit();
+        sessionStorage.removeItem("ubt_active_ride");
+        navigate("/app/home");
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [done, navigate, onSubmit]);
+
   const initials = prestador.name.split(" ").map((p) => p[0]).slice(0, 2).join("");
 
   if (done) {
     return (
-      <div className="min-h-[100svh] bg-navy text-white flex flex-col items-center justify-center px-6 text-center">
+      <div className="min-h-[100svh] bg-navy text-white flex flex-col items-center justify-center px-6 text-center relative overflow-hidden">
+        <Confetti numberOfPieces={250} recycle={false} />
         <Trophy size={64} style={{ color: "#F5A623" }} />
         <h2 className="mt-4 font-display text-[22px] font-bold">Obrigado!</h2>
         <p className="mt-2 font-sans text-[14px]" style={{ color: "rgba(255,255,255,0.7)" }}>
@@ -892,7 +918,11 @@ const RatingScreen = ({
           Sorteio: 01/05
         </span>
         <button
-          onClick={() => { onSubmit(); navigate("/app/home"); }}
+          onClick={() => {
+            onSubmit();
+            sessionStorage.removeItem("ubt_active_ride");
+            navigate("/app/home");
+          }}
           className="mt-6 w-full max-w-xs h-12 rounded-xl font-display font-semibold text-white"
           style={{ background: "#0DB87E" }}
         >
@@ -964,6 +994,31 @@ const MototaxiTomadorPage = () => {
   const [paymentStep, setPaymentStep] = useState<string>("");
   const [prefData, setPrefData] = useState<any>(null);
   const initOnce = useRef(false);
+  const msgChannelRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (!state.rideId) return;
+    const channel = supabase.channel(`ride_${state.rideId}`);
+    channel
+      .on('broadcast', { event: 'quick_message' }, ({ payload }) => {
+        if (payload?.from === 'prestador') {
+          setState((prev) => ({
+            ...prev,
+            messages: [...(prev.messages || []), payload]
+          }));
+        }
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          msgChannelRef.current = channel;
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+      msgChannelRef.current = null;
+    };
+  }, [state.rideId]);
 
   // Monitor ride state transitions to "completed" to trigger the Mercado Pago Split simulated flow
   useEffect(() => {
@@ -1425,17 +1480,31 @@ const MototaxiTomadorPage = () => {
   };
 
   const sendMessage = (text: string) => {
-    setState({
-      messages: [...(state.messages || []), { text, from: "tomador", ts: Date.now() }],
-    });
+    const newMsg = { text, from: "tomador" as const, ts: Date.now() };
+    setState((prev) => ({
+      ...prev,
+      messages: [...(prev.messages || []), newMsg],
+    }));
     if (state.rideId) {
       try {
-        const channel = supabase.channel(`ride_${state.rideId}`);
-        channel.send({
-          type: 'broadcast',
-          event: 'quick_message',
-          payload: { text, from: 'tomador', ts: Date.now() }
-        });
+        if (msgChannelRef.current) {
+          msgChannelRef.current.send({
+            type: 'broadcast',
+            event: 'quick_message',
+            payload: newMsg
+          });
+        } else {
+          const channel = supabase.channel(`ride_${state.rideId}`);
+          channel.subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+              channel.send({
+                type: 'broadcast',
+                event: 'quick_message',
+                payload: newMsg
+              });
+            }
+          });
+        }
       } catch (e) {
         console.warn("Falha ao transmitir mensagem do tomador:", e);
       }
@@ -1507,6 +1576,8 @@ const MototaxiTomadorPage = () => {
         price={state.finalPrice || state.estimatedPrice}
         distanceKm={state.distanceKm}
         durationMin={state.durationMin}
+        rideId={state.rideId}
+        prestadorInfo={state.prestadorInfo}
         onPay={handlePay}
       />
     );

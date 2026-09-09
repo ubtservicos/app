@@ -336,7 +336,7 @@ async function createMercadoPagoPayment({
 serve(async (req: Request): Promise<Response> => {
   // Handle CORS Preflight
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
+    return new Response("ok", { status: 200, headers: CORS_HEADERS });
   }
 
   // Only accept POST

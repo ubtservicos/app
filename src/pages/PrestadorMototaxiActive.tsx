@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import PrestadorMapLight from "@/components/prestador/PrestadorMapLight";
 import PrimaryButtonLight from "@/components/prestador/PrimaryButtonLight";
+import Confetti from "react-confetti";
 import { calcSplit, formatBRL, SPLIT_META } from "@/utils/ride";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/lib/supabase";
@@ -57,22 +58,64 @@ const PrestadorMototaxiActive = () => {
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [lastSentPhrase, setLastSentPhrase] = useState<string | null>(null);
+  const msgChannelRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (!ride?.id) return;
+    const channel = supabase.channel(`ride_${ride.id}`);
+    channel
+      .on('broadcast', { event: 'quick_message' }, ({ payload }) => {
+        console.log('Mensagem rápida recebida pelo prestador:', payload);
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          msgChannelRef.current = channel;
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+      msgChannelRef.current = null;
+    };
+  }, [ride?.id]);
 
   const handleSendQuickMessage = async (text: string) => {
     setLastSentPhrase(text);
     if (ride?.id) {
       try {
-        const channel = supabase.channel(`ride_${ride.id}`);
-        await channel.send({
-          type: 'broadcast',
-          event: 'quick_message',
-          payload: { text, from: 'prestador', ts: Date.now() }
-        });
+        if (msgChannelRef.current) {
+          await msgChannelRef.current.send({
+            type: 'broadcast',
+            event: 'quick_message',
+            payload: { text, from: 'prestador', ts: Date.now() }
+          });
+        } else {
+          const channel = supabase.channel(`ride_${ride.id}`);
+          channel.subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+              channel.send({
+                type: 'broadcast',
+                event: 'quick_message',
+                payload: { text, from: 'prestador', ts: Date.now() }
+              });
+            }
+          });
+        }
       } catch (e) {
         console.warn("Falha ao transmitir mensagem do prestador:", e);
       }
     }
   };
+
+  useEffect(() => {
+    if (phase === "completed") {
+      const timer = setTimeout(() => {
+        sessionStorage.removeItem("ubt_active_ride");
+        navigate("/app/prestador/home");
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [phase, navigate]);
 
   // Carregar dados da corrida do banco
   useEffect(() => {
@@ -296,9 +339,10 @@ const PrestadorMototaxiActive = () => {
     const split = calcSplit(ride.price);
     return (
       <div
-        className="min-h-[100svh] overflow-y-auto text-zinc-100"
+        className="min-h-[100svh] overflow-y-auto text-zinc-100 relative overflow-hidden"
         style={{ background: "var(--prestador-bg)", padding: 24, paddingBottom: 96 }}
       >
+        <Confetti numberOfPieces={250} recycle={false} />
         <div className="text-center pt-4">
           <CheckCircle2 size={48} color="#0DB87E" className="mx-auto" />
           <h1 className="mt-3 font-display text-[22px] font-bold text-white">

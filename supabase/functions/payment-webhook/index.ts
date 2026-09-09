@@ -322,7 +322,7 @@ async function validateMPSignature(
 // ============================================================
 serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
+    return new Response("ok", { status: 200, headers: CORS_HEADERS });
   }
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method Not Allowed" }), {
