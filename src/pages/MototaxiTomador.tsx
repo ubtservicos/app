@@ -1212,6 +1212,8 @@ const MototaxiTomadorPage = () => {
       payment_method: state.paymentMethod || 'pix'
     };
 
+    console.log('[AUDIT MototaxiTomador] Enviando INSERT em mototaxi_corridas:', newRide);
+
     const { data, error } = await supabase
       .from('mototaxi_corridas')
       .insert(newRide)
@@ -1220,10 +1222,18 @@ const MototaxiTomadorPage = () => {
 
     const duration = Date.now() - startTime;
 
+    console.log('[AUDIT MototaxiTomador] Resposta do Supabase INSERT:', {
+      success: !error,
+      data,
+      error,
+      insertedId: data?.id,
+      status: data?.status
+    });
+
     if (error) {
-      console.error('Error creating ride:', error);
+      console.error('[AUDIT MototaxiTomador] Erro fatal no INSERT de corrida:', error);
       logSystem("ERROR", "MOTOTAXI", "ride_requested", "failed", duration, error.message, error.code, { type: state.type });
-      alert('Erro ao solicitar mototáxi.');
+      alert(`Erro ao solicitar mototáxi: ${error.message || 'Falha no banco de dados'}`);
       return;
     }
 

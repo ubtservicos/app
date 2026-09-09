@@ -249,6 +249,12 @@ const PrestadorMototaxiOnline = () => {
 
       try {
         let sessionId = activeSessionIdRef.current;
+        console.log('[AUDIT PrestadorMototaxiOnline] Sincronizando sessão online no Supabase (mototaxi_sessoes):', {
+          prestador_id: user.uid,
+          lat: myLocation.lat,
+          lng: myLocation.lng,
+          sessionId
+        });
 
         // 1. Select-First: Se ainda não temos o ID em memória, buscar sessão existente no banco
         if (!sessionId) {
@@ -266,7 +272,7 @@ const PrestadorMototaxiOnline = () => {
 
         if (sessionId) {
           // 2. Reaproveitamento de sessão fantasma/ativa: Apenas UPDATE
-          const { error: updateErr } = await supabase
+          const { data: updateData, error: updateErr } = await supabase
             .from('mototaxi_sessoes')
             .update({
               is_online: true,
@@ -274,8 +280,10 @@ const PrestadorMototaxiOnline = () => {
               lng: myLocation.lng,
               updated_at: new Date().toISOString()
             })
-            .eq('id', sessionId);
+            .eq('id', sessionId)
+            .select();
 
+          console.log('[AUDIT PrestadorMototaxiOnline] Update mototaxi_sessoes:', { success: !updateErr, updateData, updateErr });
           if (updateErr) throw updateErr;
         } else {
           // 3. Nenhuma sessão existente: Inserir nova sessão
@@ -291,9 +299,11 @@ const PrestadorMototaxiOnline = () => {
             .select('id')
             .single();
 
+          console.log('[AUDIT PrestadorMototaxiOnline] Insert mototaxi_sessoes:', { success: !insertErr, inserted, insertErr });
+
           if (insertErr) {
             // Tratamento inteligente de conflito (409 Duplicate Key / Unique Constraint)
-            console.warn("Conflito ao criar sessão de mototáxi (409). Recuperando sessão ativa...", insertErr);
+            console.warn("[AUDIT PrestadorMototaxiOnline] Conflito ao criar sessão de mototáxi (409). Recuperando sessão ativa...", insertErr);
             const { data: recovered } = await supabase
               .from('mototaxi_sessoes')
               .select('id')
@@ -317,7 +327,7 @@ const PrestadorMototaxiOnline = () => {
           }
         }
       } catch (err) {
-        console.error("Erro na sincronização de sessão mototáxi:", err);
+        console.error("[AUDIT PrestadorMototaxiOnline] Erro na sincronização de sessão mototáxi:", err);
       }
     }
 
@@ -339,7 +349,7 @@ const PrestadorMototaxiOnline = () => {
           .select('*')
           .in('status', ['searching', 'pending', 'buscando', 'solicitado'])
           .order('created_at', { ascending: false })
-          .limit(1);
+          .limit(5);
 
         if (user.uid) {
           query = query.or(`prestador_id.is.null,prestador_id.eq.${user.uid}`);
@@ -349,12 +359,20 @@ const PrestadorMototaxiOnline = () => {
 
         const { data, error } = await query;
 
+        console.log('[AUDIT PrestadorMototaxiOnline] Polling fetchActiveChamado:', {
+          prestador_uid: user.uid,
+          total_encontrados: data?.length || 0,
+          chamados: data,
+          error
+        });
+
         if (!error && data && data.length > 0) {
           const c = data[0];
           const originObj = typeof c.origin === 'string' ? JSON.parse(c.origin) : c.origin;
           const destObj = typeof c.destination === 'string' ? JSON.parse(c.destination) : c.destination;
           setChamado((prev) => {
             if (prev && prev.id === c.id) return prev;
+            console.log('[AUDIT PrestadorMototaxiOnline] Novo chamado ativado no estado!', c);
             playChamadoSound();
             return {
               id: c.id,
@@ -368,7 +386,7 @@ const PrestadorMototaxiOnline = () => {
           });
         }
       } catch (err) {
-        console.error("Erro ao carregar chamados ativos:", err);
+        console.error("[AUDIT PrestadorMototaxiOnline] Erro ao carregar chamados ativos:", err);
       }
     };
 
@@ -379,10 +397,19 @@ const PrestadorMototaxiOnline = () => {
 
   // Realtime subscription com auto-reconnect para novas inserções e atualizações de corrida
   const handleNewCorrida = useCallback((payload: any) => {
-    console.log('Evento Realtime Recebido:', payload);
+    console.log('[AUDIT PrestadorMototaxiOnline] Evento Realtime Recebido:', payload);
     const c = payload.new;
     const isPending = c && ['searching', 'pending', 'buscando', 'solicitado'].includes(c.status);
     const isTargetPrestador = c && (!c.prestador_id || c.prestador_id === user.uid);
+    console.log('[AUDIT PrestadorMototaxiOnline] Avaliação do chamado Realtime:', {
+      corrida_id: c?.id,
+      status: c?.status,
+      prestador_id: c?.prestador_id,
+      my_uid: user.uid,
+      isPending,
+      isTargetPrestador
+    });
+
     if (c && isPending && isTargetPrestador) {
       try {
         const originObj = typeof c.origin === 'string' ? JSON.parse(c.origin) : c.origin;
@@ -396,9 +423,10 @@ const PrestadorMototaxiOnline = () => {
           durationMin: Number(c.duration_min || 0),
           price: Number(c.estimated_price || 0)
         });
+        console.log('[AUDIT PrestadorMototaxiOnline] Modal e Som acionados via Realtime!');
         playChamadoSound();
       } catch (err) {
-        console.error("Erro ao parsear chamada recebida:", err);
+        console.error("[AUDIT PrestadorMototaxiOnline] Erro ao parsear chamada recebida:", err);
       }
     } else if (c && !isPending) {
       setChamado((prev) => (prev && prev.id === c.id ? null : prev));
@@ -410,7 +438,7 @@ const PrestadorMototaxiOnline = () => {
     { event: '*', table: 'mototaxi_corridas' },
     handleNewCorrida,
     (status) => {
-      console.log('Status do Canal Realtime (mototaxi_corridas):', status);
+      console.log('[AUDIT PrestadorMototaxiOnline] Status do Canal Realtime (mototaxi_corridas):', status);
       if (status === 'reconnecting') toast.info('Reconectando ao servidor...');
       if (status === 'error') toast.error('Conexão perdida. Atualize a página.');
     }
@@ -421,7 +449,7 @@ const PrestadorMototaxiOnline = () => {
     const broadcastChan = supabase
       .channel('mototaxi_chamados_broadcast')
       .on('broadcast', { event: 'new_chamado' }, ({ payload }) => {
-        console.log('[Broadcast] Novo chamado recebido:', payload);
+        console.log('[AUDIT PrestadorMototaxiOnline] Broadcast new_chamado recebido:', payload);
         if (payload && payload.id) {
           const originObj = typeof payload.origin === 'string' ? JSON.parse(payload.origin) : payload.origin;
           const destObj = typeof payload.destination === 'string' ? JSON.parse(payload.destination) : payload.destination;
@@ -434,6 +462,7 @@ const PrestadorMototaxiOnline = () => {
             durationMin: Number(payload.duration_min || 0),
             price: Number(payload.estimated_price || 0)
           });
+          console.log('[AUDIT PrestadorMototaxiOnline] Modal e Som acionados via Broadcast!');
           playChamadoSound();
         }
       })
