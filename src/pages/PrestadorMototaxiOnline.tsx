@@ -337,7 +337,7 @@ const PrestadorMototaxiOnline = () => {
         const { data, error } = await supabase
           .from('mototaxi_corridas')
           .select('*')
-          .eq('status', 'searching')
+          .in('status', ['searching', 'pending', 'buscando', 'solicitado'])
           .is('prestador_id', null)
           .order('created_at', { ascending: false })
           .limit(1);
@@ -374,7 +374,8 @@ const PrestadorMototaxiOnline = () => {
   const handleNewCorrida = useCallback((payload: any) => {
     console.log('Evento Realtime Recebido:', payload);
     const c = payload.new;
-    if (c && c.status === 'searching' && !c.prestador_id) {
+    const isPending = c && ['searching', 'pending', 'buscando', 'solicitado'].includes(c.status);
+    if (c && isPending && !c.prestador_id) {
       try {
         const originObj = typeof c.origin === 'string' ? JSON.parse(c.origin) : c.origin;
         const destObj = typeof c.destination === 'string' ? JSON.parse(c.destination) : c.destination;
@@ -391,7 +392,7 @@ const PrestadorMototaxiOnline = () => {
       } catch (err) {
         console.error("Erro ao parsear chamada recebida:", err);
       }
-    } else if (c && c.status !== 'searching') {
+    } else if (c && !isPending) {
       setChamado((prev) => (prev && prev.id === c.id ? null : prev));
     }
   }, []);
@@ -464,7 +465,7 @@ const PrestadorMototaxiOnline = () => {
           accepted_at: new Date().toISOString()
         })
         .eq('id', chamado.id)
-        .eq('status', 'searching')
+        .in('status', ['searching', 'pending', 'buscando', 'solicitado'])
         .is('prestador_id', null)
         .select('id')
         .single();

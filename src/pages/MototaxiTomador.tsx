@@ -1166,8 +1166,19 @@ const MototaxiTomadorPage = () => {
   }, [state.status, state.rideId]);
 
   const handleConfirm = async () => {
-    if (!state.origin || !state.destination || !user.uid) return;
+    if (!state.origin || !state.destination) return;
     const startTime = Date.now();
+
+    let tomadorId = user.uid;
+    if (!tomadorId) {
+      const { data: authData } = await supabase.auth.getUser();
+      tomadorId = authData?.user?.id || "";
+    }
+
+    if (!tomadorId) {
+      toast.error("Por favor, faça login para solicitar a corrida.");
+      return;
+    }
 
     // Validar Geofence de Origem e Destino
     const originGeo = validateGeofence(state.origin.address, { lat: state.origin.lat, lng: state.origin.lng });
@@ -1180,7 +1191,7 @@ const MototaxiTomadorPage = () => {
     }
 
     const newRide = {
-      tomador_id: user.uid,
+      tomador_id: tomadorId,
       status: 'searching',
       type: state.type || 'carona',
       origin: {

@@ -129,6 +129,46 @@ const PrestadorHome = () => {
   const hasCoco = user.role === "cocoecia" || user.role === "cocoecia-colaborador" || user.role === "cocoecia-dirigentes" || (() => { try { return !!localStorage.getItem("caminhaoId"); } catch { return false; } })();
 
   useEffect(() => {
+    if (!user.uid) return;
+
+    const fetchAllServiceStatuses = async () => {
+      try {
+        // 1. Mototáxi
+        const { data: motoData } = await supabase
+          .from("mototaxi_sessoes")
+          .select("is_online")
+          .eq("prestador_id", user.uid)
+          .maybeSingle();
+
+        // 2. Ambulante
+        const { data: ambData } = await supabase
+          .from("ambulante_sessions")
+          .select("is_online")
+          .eq("id", user.uid)
+          .maybeSingle();
+
+        // 3. Diarista
+        const { data: diaData } = await supabase
+          .from("diarista_perfis")
+          .select("is_online")
+          .eq("user_id", user.uid)
+          .maybeSingle();
+
+        setActiveServices((prev) => ({
+          ...prev,
+          mototaxi: !!motoData?.is_online,
+          ambulante: !!ambData?.is_online,
+          diarista: !!diaData?.is_online,
+        }));
+      } catch (err) {
+        console.error("Erro ao sincronizar status dos serviços do prestador:", err);
+      }
+    };
+
+    fetchAllServiceStatuses();
+  }, [user.uid]);
+
+  useEffect(() => {
     const caminhaoId = localStorage.getItem("caminhaoId");
     if (!caminhaoId) {
       setActiveCaminhao(null);
@@ -201,7 +241,68 @@ const PrestadorHome = () => {
       }
       return;
     }
-    setActiveServices(prev => ({ ...prev, [key]: !prev[key] }));
+
+    const nextStatus = !activeServices[key];
+    setActiveServices(prev => ({ ...prev, [key]: nextStatus }));
+
+    if (!user.uid) return;
+
+    try {
+      if (key === 'mototaxi') {
+        const { data: existing } = await supabase
+          .from('mototaxi_sessoes')
+          .select('id')
+          .eq('prestador_id', user.uid)
+          .maybeSingle();
+
+        if (existing) {
+          await supabase
+            .from('mototaxi_sessoes')
+            .update({ is_online: nextStatus, updated_at: new Date().toISOString() })
+            .eq('prestador_id', user.uid);
+        } else {
+          await supabase
+            .from('mototaxi_sessoes')
+            .insert({ prestador_id: user.uid, is_online: nextStatus, updated_at: new Date().toISOString() });
+        }
+      } else if (key === 'ambulante') {
+        const { data: existing } = await supabase
+          .from('ambulante_sessions')
+          .select('id')
+          .eq('id', user.uid)
+          .maybeSingle();
+
+        if (existing) {
+          await supabase
+            .from('ambulante_sessions')
+            .update({ is_online: nextStatus })
+            .eq('id', user.uid);
+        } else {
+          await supabase
+            .from('ambulante_sessions')
+            .insert({ id: user.uid, is_online: nextStatus });
+        }
+      } else if (key === 'diarista') {
+        const { data: existing } = await supabase
+          .from('diarista_perfis')
+          .select('user_id')
+          .eq('user_id', user.uid)
+          .maybeSingle();
+
+        if (existing) {
+          await supabase
+            .from('diarista_perfis')
+            .update({ is_online: nextStatus })
+            .eq('user_id', user.uid);
+        } else {
+          await supabase
+            .from('diarista_perfis')
+            .insert({ user_id: user.uid, is_online: nextStatus });
+        }
+      }
+    } catch (err) {
+      console.error(`Erro ao persistir status online do serviço ${key}:`, err);
+    }
   };
 
   // Fetch Ambulante Pedidos if Ambulante is active
