@@ -62,7 +62,7 @@ const PrestadorMototaxiActive = () => {
 
   useEffect(() => {
     if (!ride?.id) return;
-    const channel = supabase.channel(`ride_${ride.id}`);
+    const channel = supabase.channel(`ride_msg_${ride.id}`);
     channel
       .on('broadcast', { event: 'quick_message' }, ({ payload }) => {
         console.log('Mensagem rápida recebida pelo prestador:', payload);
@@ -90,7 +90,7 @@ const PrestadorMototaxiActive = () => {
             payload: { text, from: 'prestador', ts: Date.now() }
           });
         } else {
-          const channel = supabase.channel(`ride_${ride.id}`);
+          const channel = supabase.channel(`ride_msg_${ride.id}`);
           channel.subscribe((status) => {
             if (status === 'SUBSCRIBED') {
               channel.send({

@@ -430,7 +430,20 @@ const PrestadorHome = () => {
         >
           <button
             type="button"
-            onClick={() => navigate("/app/home")}
+            onClick={() => {
+              const activeRideStr = sessionStorage.getItem("ubt_active_ride");
+              if (activeRideStr) {
+                try {
+                  const activeRide = JSON.parse(activeRideStr);
+                  if (activeRide.prestador_id && activeRide.prestador_id === user.uid) {
+                    sessionStorage.removeItem("ubt_active_ride");
+                  }
+                } catch {
+                  sessionStorage.removeItem("ubt_active_ride");
+                }
+              }
+              navigate("/app/home");
+            }}
             className="font-sans text-[13px] flex-1"
             style={{ color: theme.muted, padding: "8px 0" }}
           >

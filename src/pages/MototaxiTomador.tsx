@@ -998,7 +998,7 @@ const MototaxiTomadorPage = () => {
 
   useEffect(() => {
     if (!state.rideId) return;
-    const channel = supabase.channel(`ride_${state.rideId}`);
+    const channel = supabase.channel(`ride_msg_${state.rideId}`);
     channel
       .on('broadcast', { event: 'quick_message' }, ({ payload }) => {
         if (payload?.from === 'prestador') {
@@ -1186,7 +1186,7 @@ const MototaxiTomadorPage = () => {
     const pollInterval = setInterval(syncCurrentStatus, 2000);
 
     const channel = supabase
-      .channel(`ride_${state.rideId}`)
+      .channel(`ride_status_${state.rideId}`)
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'mototaxi_corridas', filter: `id=eq.${state.rideId}` },
@@ -1494,7 +1494,7 @@ const MototaxiTomadorPage = () => {
             payload: newMsg
           });
         } else {
-          const channel = supabase.channel(`ride_${state.rideId}`);
+          const channel = supabase.channel(`ride_msg_${state.rideId}`);
           channel.subscribe((status) => {
             if (status === 'SUBSCRIBED') {
               channel.send({
