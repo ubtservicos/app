@@ -1,110 +1,66 @@
-import L from 'leaflet';
+// Helper to create an SVG data URL with an emoji badge
+const createEmojiIconSvg = (emoji: string, bgColor: string, size = 38): string => {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <circle cx="${size / 2}" cy="${size / 2}" r="${size / 2 - 2}" fill="${bgColor}" stroke="#FFFFFF" stroke-width="2.5" />
+    <text x="50%" y="54%" font-size="${size * 0.48}" text-anchor="middle" dominant-baseline="middle">${emoji}</text>
+  </svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+};
 
-// Ícone base para criar SVGs coloridos
-const svgIcon = (color: string, innerSvg: string, size = 36) =>
-    L.divIcon({
-        html: `
-      <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size + 8}" viewBox="0 0 36 44">
-        <circle cx="18" cy="18" r="16" fill="${color}" stroke="white" stroke-width="2"/>
-        ${innerSvg}
-        <polygon points="12,33 24,33 18,44" fill="${color}"/>
-      </svg>
-    `,
-        className: '',
-        iconSize: [size, size + 8],
-        iconAnchor: [size / 2, size + 8],
-        popupAnchor: [0, -(size + 8)],
-    });
+// Tomador (Passageiro) Icon
+const tomadorSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <circle cx="12" cy="12" r="8" fill="#2B6EE8" stroke="#FFFFFF" stroke-width="3"/>
+</svg>`;
+export const tomadorIcon = {
+  url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(tomadorSvg)}`,
+  scaledSize: { width: 24, height: 24 } as any,
+};
 
-// Marcador do Tomador (círculo azul)
-export const tomadorIcon = L.divIcon({
-    html: `<div style="width:16px;height:16px;border-radius:50%;background:#2B6EE8;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.30)"></div>`,
-    className: '',
-    iconSize: [16, 16],
-    iconAnchor: [8, 8],
+// Destino Icon
+const destinoSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34">
+  <circle cx="17" cy="17" r="15" fill="#FFFFFF" stroke="#0DB87E" stroke-width="3" />
+  <text x="50%" y="55%" font-size="16" text-anchor="middle" dominant-baseline="middle">📍</text>
+</svg>`;
+export const destinoIcon = {
+  url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(destinoSvg)}`,
+  scaledSize: { width: 34, height: 34 } as any,
+};
+
+// Mototáxi Icon (Online/Offline)
+export const motoIcon = (isOnline = true) => ({
+  url: createEmojiIconSvg('🏍️', isOnline ? '#0DB87E' : '#9399AD'),
+  scaledSize: { width: 38, height: 38 } as any,
 });
 
-// Marcador do Prestador / Mototaxi
-export const motoIcon = (isOnline: boolean) => L.divIcon({
-    html: `
-    <div style="background:${isOnline ? '#0DB87E' : '#9399AD'};border-radius:50%;width:36px;height:36px;
-      display:flex;align-items:center;justify-content:center;border:2px solid white;
-      box-shadow:0 2px 8px rgba(0,0,0,0.25);font-size:18px;">
-      🏍️
-    </div>
-  `,
-    className: '',
-    iconSize: [36, 36],
-    iconAnchor: [18, 18],
-});
+// Ambulante Icon
+export const ambuIcon = (categoria = 'comida') => {
+  const bg = categoria === 'esporte' ? '#F5A623' : categoria === 'bebida' ? '#2B6EE8' : categoria === 'acessorio' ? '#9B59B6' : '#0DB87E';
+  const emoji = categoria === 'esporte' ? '🏄' : categoria === 'bebida' ? '🥥' : categoria === 'acessorio' ? '🕶️' : '🍢';
+  return {
+    url: createEmojiIconSvg(emoji, bg),
+    scaledSize: { width: 38, height: 38 } as any,
+  };
+};
 
-// Marcador de destino
-export const destinoIcon = L.divIcon({
-    html: `
-    <div style="background:white;border-radius:50%;width:32px;height:32px;
-      display:flex;align-items:center;justify-content:center;
-      border:2px solid #0DB87E;box-shadow:0 2px 8px rgba(0,0,0,0.20);font-size:16px;">
-      📍
-    </div>
-  `,
-    className: '',
-    iconSize: [32, 32],
-    iconAnchor: [16, 32],
-});
-
-// Marcador de coleta (Côco & Cia) por material
+// Coleta Icon (Materiais Recicláveis)
 const MATERIAL_EMOJI: Record<string, string> = {
-    plastico: '♻️', vidro: '🫙', organico: '🌱',
-    metal: '🥫', papel: '📦', misto: '🗑️', eletronico: '📱',
+  plastico: '♻️', vidro: '🫙', organico: '🌱', metal: '🥫', papel: '📦', misto: '🗑️', eletronico: '📱',
 };
 const MATERIAL_COR: Record<string, string> = {
-    plastico: '#2B6EE8', vidro: '#9B59B6', organico: '#0DB87E',
-    metal: '#9399AD', papel: '#F5A623', misto: '#5B6178', eletronico: '#E84040',
+  plastico: '#2B6EE8', vidro: '#9B59B6', organico: '#0DB87E', metal: '#9399AD', papel: '#F5A623', misto: '#5B6178', eletronico: '#E84040',
 };
 
-export const coletaIcon = (material: string, coletado = false) => L.divIcon({
-    html: `
-    <div style="background:${coletado ? '#9399AD' : MATERIAL_COR[material] || '#5B6178'};
-      border-radius:50%;width:36px;height:36px;
-      display:flex;align-items:center;justify-content:center;
-      border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.25);
-      font-size:18px;opacity:${coletado ? 0.5 : 1};">
-      ${MATERIAL_EMOJI[material] || '🗑️'}
-    </div>
-  `,
-    className: '',
-    iconSize: [36, 36],
-    iconAnchor: [18, 36],
-});
+export const coletaIcon = (material = 'misto', coletado = false) => {
+  const bg = coletado ? '#9399AD' : MATERIAL_COR[material] || '#5B6178';
+  const emoji = MATERIAL_EMOJI[material] || '🗑️';
+  return {
+    url: createEmojiIconSvg(emoji, bg),
+    scaledSize: { width: 38, height: 38 } as any,
+  };
+};
 
-// Marcador de caminhão (Côco & Cia)
-export const caminhaoIcon = (isOnline: boolean) => L.divIcon({
-    html: `
-    <div style="background:${isOnline ? '#0DB87E' : '#9399AD'};border-radius:8px;
-      padding:4px 8px;border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.25);
-      font-size:18px;white-space:nowrap;">
-      🚛
-    </div>
-  `,
-    className: '',
-    iconSize: [44, 36],
-    iconAnchor: [22, 18],
-});
-
-// Marcador de ambulante por categoria
-export const ambuIcon = (categoria: string) => L.divIcon({
-    html: `
-    <div style="background:${categoria === 'esporte' ? '#F5A623'
-            : categoria === 'bebida' ? '#2B6EE8'
-                : categoria === 'acessorio' ? '#9B59B6'
-                    : '#0DB87E'
-        };border-radius:50%;width:36px;height:36px;
-      display:flex;align-items:center;justify-content:center;
-      border:2px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.25);font-size:18px;">
-      ${categoria === 'esporte' ? '🏄' : categoria === 'bebida' ? '🥥' : categoria === 'acessorio' ? '🕶️' : '🍢'}
-    </div>
-  `,
-    className: '',
-    iconSize: [36, 36],
-    iconAnchor: [18, 36],
+// Caminhão Coleta Icon
+export const caminhaoIcon = (isOnline = true) => ({
+  url: createEmojiIconSvg('🚛', isOnline ? '#0DB87E' : '#9399AD'),
+  scaledSize: { width: 38, height: 38 } as any,
 });

@@ -1,61 +1,153 @@
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
-    MapContainer, TileLayer, Marker, Popup,
-    useMap, useMapEvents
-} from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+  APIProvider,
+  Map as GoogleMap,
+  AdvancedMarker,
+  Marker,
+  useMap,
+  useMapsLibrary
+} from '@vis.gl/react-google-maps';
+import {
+  GOOGLE_MAPS_API_KEY,
+  UBATUBA_CENTER,
+  UBATUBA_BOUNDS,
+  isValidLatLng,
+  GOOGLE_MAPS_DARK_STYLE,
+} from '@/lib/googleMapsConfig';
 
-// Tile escuro (dark theme para o Tomador)
-export const DARK_TILES = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-
-// Tile claro (para o Prestador e o Admin)
-export const LIGHT_TILES = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-
-// Tile padrão OpenStreetMap (fallback)
-export const OSM_TILES = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-
-// Attribution obrigatório (OpenStreetMap exige)
-export const ATTRIBUTION =
-    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>';
-
-// Ubatuba como centro padrão
-export const UBATUBA_CENTER: [number, number] = [-23.4336, -45.0838];
-
-// Validador estrito de coordenadas geográficas
-export const isValidLatLng = (lat: any, lng: any): boolean => {
-    if (lat === null || lat === undefined || lng === null || lng === undefined) return false;
-    const nLat = typeof lat === 'number' ? lat : Number(String(lat).trim());
-    const nLng = typeof lng === 'number' ? lng : Number(String(lng).trim());
-    return typeof nLat === 'number' && typeof nLng === 'number' && !isNaN(nLat) && !isNaN(nLng) && isFinite(nLat) && isFinite(nLng) && nLat !== 0 && nLng !== 0;
+export {
+  GOOGLE_MAPS_API_KEY,
+  UBATUBA_CENTER,
+  UBATUBA_BOUNDS,
+  isValidLatLng,
+  GOOGLE_MAPS_DARK_STYLE,
 };
 
-// Componente auxiliar para mover o mapa programaticamente
-export function FlyTo({ center, zoom }: { center: [number, number]; zoom?: number }) {
-    const map = useMap();
-    useEffect(() => {
-        if (Array.isArray(center) && isValidLatLng(center[0], center[1])) {
-            const lat = Number(center[0]);
-            const lng = Number(center[1]);
-            map.flyTo([lat, lng], zoom ?? map.getZoom(), { duration: 1.2 });
-        }
-    }, [center, zoom, map]);
-    return null;
+// Componente para desenhar Polyline no Google Map
+export function GooglePolyline({
+  path,
+  color = '#0DB87E',
+  weight = 4,
+  opacity = 0.9,
+}: {
+  path: [number, number][];
+  color?: string;
+  weight?: number;
+  opacity?: number;
+}) {
+  const map = useMap();
+  const polylineRef = useRef<google.maps.Polyline | null>(null);
+
+  useEffect(() => {
+    if (!map || typeof google === 'undefined' || !google.maps) return;
+
+    if (!polylineRef.current) {
+      polylineRef.current = new google.maps.Polyline({
+        map,
+        strokeColor: color,
+        strokeWeight: weight,
+        strokeOpacity: opacity,
+      });
+    } else {
+      polylineRef.current.setMap(map);
+      polylineRef.current.setOptions({ strokeColor: color, strokeWeight: weight, strokeOpacity: opacity });
+    }
+
+    const latLngPath = path
+      .filter(([lat, lng]) => isValidLatLng(lat, lng))
+      .map(([lat, lng]) => ({ lat: Number(lat), lng: Number(lng) }));
+
+    polylineRef.current.setPath(latLngPath);
+
+    return () => {
+      if (polylineRef.current) {
+        polylineRef.current.setMap(null);
+      }
+    };
+  }, [map, path, color, weight, opacity]);
+
+  return null;
 }
 
-// Componente auxiliar para capturar clique no mapa
+// Componente para mover a câmera suavemente (FlyTo)
+export function MapFlyTo({ center, zoom = 15 }: { center: { lat: number; lng: number } | [number, number]; zoom?: number }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map) return;
+    const lat = Array.isArray(center) ? center[0] : center.lat;
+    const lng = Array.isArray(center) ? center[1] : center.lng;
+    if (isValidLatLng(lat, lng)) {
+      map.panTo({ lat: Number(lat), lng: Number(lng) });
+      if (zoom) map.setZoom(zoom);
+    }
+  }, [map, center, zoom]);
+
+  return null;
+}
+
+// Componente para capturar clique no mapa
 export function MapClickHandler({ onClick }: { onClick: (lat: number, lng: number) => void }) {
-    useMapEvents({
-        click(e) {
-            onClick(e.latlng.lat, e.latlng.lng);
-        },
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map || typeof google === 'undefined' || !google.maps) return;
+    const listener = map.addListener('click', (e: google.maps.MapMouseEvent) => {
+      if (e.latLng) {
+        onClick(e.latLng.lat(), e.latLng.lng());
+      }
     });
-    return null;
+
+    return () => {
+      google.maps.event.removeListener(listener);
+    };
+  }, [map, onClick]);
+
+  return null;
 }
 
-// Componente auxiliar para manter referência externa do mapa
-export function MapRef({ mapRef }: { mapRef: React.MutableRefObject<L.Map | null> }) {
-    const map = useMap();
-    useEffect(() => { mapRef.current = map; }, [map]);
-    return null;
+interface UBTMapProps {
+  center?: { lat: number; lng: number } | [number, number];
+  zoom?: number;
+  style?: React.CSSProperties;
+  children?: React.ReactNode;
+  dark?: boolean;
+  onClick?: (lat: number, lng: number) => void;
+  gestureHandling?: 'cooperative' | 'greedy' | 'none' | 'auto';
 }
+
+export function UBTMap({
+  center = UBATUBA_CENTER,
+  zoom = 14,
+  style = { width: '100%', height: '400px' },
+  children,
+  dark = true,
+  onClick,
+  gestureHandling = 'greedy',
+}: UBTMapProps) {
+  const defaultCenter = Array.isArray(center)
+    ? { lat: Number(center[0]), lng: Number(center[1]) }
+    : { lat: Number(center.lat), lng: Number(center.lng) };
+
+  return (
+    <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['places', 'routes', 'geometry']}>
+      <GoogleMap
+        defaultCenter={defaultCenter}
+        defaultZoom={zoom}
+        style={style}
+        styles={dark ? GOOGLE_MAPS_DARK_STYLE : undefined}
+        disableDefaultUI={true}
+        gestureHandling={gestureHandling}
+        restriction={{
+          latLngBounds: UBATUBA_BOUNDS,
+          strictBounds: false,
+        }}
+      >
+        {onClick && <MapClickHandler onClick={onClick} />}
+        {children}
+      </GoogleMap>
+    </APIProvider>
+  );
+}
+
+export default UBTMap;

@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
-import L from 'leaflet';
+import React, { useEffect, useState } from 'react';
+import { Marker } from '@vis.gl/react-google-maps';
 import type { LatLngAddr, RideStatus } from '@/contexts/RideContext';
 import { tomadorIcon, motoIcon, destinoIcon } from '@/lib/mapIcons';
 import { getRouteInfo } from '@/lib/geoService';
-import { isValidLatLng, FlyTo, MapRef, DARK_TILES, ATTRIBUTION, UBATUBA_CENTER } from '@/components/UBTMap';
+import { UBTMap, GooglePolyline, MapFlyTo, isValidLatLng, UBATUBA_CENTER } from '@/components/UBTMap';
 
 interface Props {
   origin: LatLngAddr | null;
@@ -15,7 +14,6 @@ interface Props {
   onlineDrivers?: any[];
 }
 
-// Renders a dark fallback "map surface" when there is no valid location.
 const MapFallback = ({ status, center }: { status: RideStatus; center: { lat: number; lng: number } }) => (
   <div
     className="absolute inset-0"
@@ -52,10 +50,8 @@ const MototaxiMap = ({
   center,
   onlineDrivers,
 }: Props) => {
-  const mapRef = useRef<L.Map | null>(null);
   const [polyline, setPolyline] = useState<[number, number][]>([]);
 
-  // Buscar rota quando origem e destino existirem
   useEffect(() => {
     if (!origin || !destination) {
       setPolyline([]);
@@ -70,46 +66,36 @@ const MototaxiMap = ({
     return <MapFallback status={status} center={center} />;
   }
 
-  const mapCenter: [number, number] = (origin && isValidLatLng(origin.lat, origin.lng))
-    ? [Number(origin.lat), Number(origin.lng)]
-    : (isValidLatLng(center?.lat, center?.lng) ? [Number(center.lat), Number(center.lng)] : UBATUBA_CENTER);
+  const mapCenter = origin && isValidLatLng(origin.lat, origin.lng)
+    ? { lat: Number(origin.lat), lng: Number(origin.lng) }
+    : (isValidLatLng(center?.lat, center?.lng) ? { lat: Number(center.lat), lng: Number(center.lng) } : UBATUBA_CENTER);
 
   return (
-    <MapContainer
-      center={mapCenter}
-      zoom={15}
-      style={{ width: '100%', height: '400px' }}
-      zoomControl={false}
-      attributionControl={false}
-    >
-      <TileLayer url={DARK_TILES} attribution={ATTRIBUTION} />
-      <MapRef mapRef={mapRef} />
+    <UBTMap center={mapCenter} zoom={15} style={{ width: '100%', height: '400px' }}>
       {origin && isValidLatLng(origin.lat, origin.lng) && (
-        <Marker position={[Number(origin.lat), Number(origin.lng)]} icon={tomadorIcon} />
+        <Marker position={{ lat: Number(origin.lat), lng: Number(origin.lng) }} icon={tomadorIcon} />
       )}
       {destination && isValidLatLng(destination.lat, destination.lng) && (
-        <Marker position={[Number(destination.lat), Number(destination.lng)]} icon={destinoIcon} />
+        <Marker position={{ lat: Number(destination.lat), lng: Number(destination.lng) }} icon={destinoIcon} />
       )}
       {prestadorLocation && isValidLatLng(prestadorLocation.lat, prestadorLocation.lng) && (
-        <Marker position={[Number(prestadorLocation.lat), Number(prestadorLocation.lng)]} icon={motoIcon(true)} />
+        <Marker position={{ lat: Number(prestadorLocation.lat), lng: Number(prestadorLocation.lng) }} icon={motoIcon(true)} />
       )}
       {onlineDrivers && onlineDrivers.map((d) => {
         if (!d || !isValidLatLng(d.lat, d.lng)) return null;
         return (
           <Marker 
             key={d.id} 
-            position={[Number(d.lat), Number(d.lng)]} 
+            position={{ lat: Number(d.lat), lng: Number(d.lng) }} 
             icon={motoIcon(true)} 
           />
         );
       })}
-      {polyline.length > 0 && (
-        <Polyline positions={polyline} color="#0DB87E" weight={4} opacity={0.9} />
-      )}
+      {polyline.length > 0 && <GooglePolyline path={polyline} color="#0DB87E" weight={4} />}
       {origin && isValidLatLng(origin.lat, origin.lng) && (
-        <FlyTo center={[Number(origin.lat), Number(origin.lng)]} zoom={15} />
+        <MapFlyTo center={{ lat: Number(origin.lat), lng: Number(origin.lng) }} zoom={15} />
       )}
-    </MapContainer>
+    </UBTMap>
   );
 };
 

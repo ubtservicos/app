@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline } from 'react-leaflet';
-import L from 'leaflet';
+import React, { useEffect, useState } from 'react';
+import { Marker } from '@vis.gl/react-google-maps';
 import { motoIcon, tomadorIcon, destinoIcon, ambuIcon, coletaIcon } from '@/lib/mapIcons';
 import { getRouteInfo } from '@/lib/geoService';
-import { MapRef, DARK_TILES, ATTRIBUTION, UBATUBA_CENTER, isValidLatLng } from '@/components/UBTMap';
+import { UBTMap, GooglePolyline, isValidLatLng, UBATUBA_CENTER } from '@/components/UBTMap';
 
 interface Props {
   myLocation: { lat: number; lng: number } | null;
@@ -11,7 +10,7 @@ interface Props {
   destination?: { lat: number; lng: number } | null;
   routeFrom?: { lat: number; lng: number } | null;
   routeTo?: { lat: number; lng: number } | null;
-  providerType?: "mototaxi" | "ambulante" | "coco";
+  providerType?: 'mototaxi' | 'ambulante' | 'coco';
 }
 
 const Fallback = ({ myLocation }: { myLocation: { lat: number; lng: number } | null }) => (
@@ -39,13 +38,15 @@ const Fallback = ({ myLocation }: { myLocation: { lat: number; lng: number } | n
   </div>
 );
 
-const PrestadorMapLight = ({ myLocation, origin, destination, routeFrom, routeTo, providerType = "mototaxi" }: Props) => {
-  const mapRef = useRef<L.Map | null>(null);
+const PrestadorMapLight = ({ myLocation, origin, destination, routeFrom, routeTo, providerType = 'mototaxi' }: Props) => {
   const [polyline, setPolyline] = useState<[number, number][]>([]);
 
   useEffect(() => {
-    if (!routeFrom || !routeTo) { setPolyline([]); return; }
-    getRouteInfo(routeFrom, routeTo).then(info => {
+    if (!routeFrom || !routeTo) {
+      setPolyline([]);
+      return;
+    }
+    getRouteInfo(routeFrom, routeTo).then((info) => {
       if (info) setPolyline(info.polyline);
     });
   }, [routeFrom?.lat, routeFrom?.lng, routeTo?.lat, routeTo?.lng]);
@@ -54,34 +55,24 @@ const PrestadorMapLight = ({ myLocation, origin, destination, routeFrom, routeTo
     return <Fallback myLocation={myLocation} />;
   }
 
-  const center: [number, number] = [Number(myLocation.lat), Number(myLocation.lng)];
+  const center = { lat: Number(myLocation.lat), lng: Number(myLocation.lng) };
 
   return (
-    <MapContainer
-      center={center}
-      zoom={15}
-      style={{ width: '100%', height: '400px' }}
-      zoomControl={false}
-      attributionControl={false}
-    >
-      <TileLayer url={DARK_TILES} attribution={ATTRIBUTION} />
-      <MapRef mapRef={mapRef} />
+    <UBTMap center={center} zoom={15} style={{ width: '100%', height: '400px' }}>
       {myLocation && isValidLatLng(myLocation.lat, myLocation.lng) && (
-        <Marker 
-          position={[Number(myLocation.lat), Number(myLocation.lng)]} 
-          icon={providerType === "ambulante" ? ambuIcon("comida") : providerType === "coco" ? coletaIcon("misto") : motoIcon(true)} 
+        <Marker
+          position={{ lat: Number(myLocation.lat), lng: Number(myLocation.lng) }}
+          icon={providerType === 'ambulante' ? ambuIcon('comida') : providerType === 'coco' ? coletaIcon('misto') : motoIcon(true)}
         />
       )}
       {origin && isValidLatLng(origin.lat, origin.lng) && (
-        <Marker position={[Number(origin.lat), Number(origin.lng)]} icon={tomadorIcon} />
+        <Marker position={{ lat: Number(origin.lat), lng: Number(origin.lng) }} icon={tomadorIcon} />
       )}
       {destination && isValidLatLng(destination.lat, destination.lng) && (
-        <Marker position={[Number(destination.lat), Number(destination.lng)]} icon={destinoIcon} />
+        <Marker position={{ lat: Number(destination.lat), lng: Number(destination.lng) }} icon={destinoIcon} />
       )}
-      {polyline.length > 0 && (
-        <Polyline positions={polyline} color="#0DB87E" weight={4} opacity={0.9} />
-      )}
-    </MapContainer>
+      {polyline.length > 0 && <GooglePolyline path={polyline} color="#0DB87E" weight={4} />}
+    </UBTMap>
   );
 };
 
