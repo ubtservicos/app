@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import L from "leaflet";
+import { Marker } from '@vis.gl/react-google-maps';
+
 import { ArrowLeft, Settings, X, Calendar, Check, Compass, CheckCircle, MapPin } from "lucide-react";
 import { MOCK_COCO_CONFIG, type PontoColeta } from "@/mocks/cocoMock";
 import { getMaterial } from "@/mocks/cocoMateriais";
 import { getPinIcon, getTruckIcon, getTruckIconUrl } from "@/utils/cocoIcons";
 import { formatDist, haversineKm } from "@/utils/geo";
-import { MapRef, DARK_TILES, ATTRIBUTION, isValidLatLng } from "@/components/UBTMap";
+import { UBTMap, isValidLatLng, UBATUBA_CENTER } from '@/components/UBTMap';
 import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useGeolocation } from "@/hooks/useGeolocation";
@@ -952,105 +952,24 @@ const CocoOnlinePage = () => {
 
       <div style={{ height: "55svh", position: "relative" }}>
         {mounted && (
-          <MapContainer
-            center={[myLocation?.lat || -23.4332, myLocation?.lng || -45.0711]}
-            zoom={15}
+          <UBTMap
+            center={{ lat: myLocation?.lat || -23.432, lng: myLocation?.lng || -45.083 }}
+            zoom={14}
             style={{ width: "100%", height: "400px" }}
-            zoomControl={false}
-            attributionControl={false}
           >
-            <TileLayer url={DARK_TILES} attribution={ATTRIBUTION} />
-            <MapRef mapRef={mapRef} />
-            <Marker position={[myLocation?.lat || -23.4332, myLocation?.lng || -45.0711]} icon={getTruckIcon(isOnline, true)} />
+            <Marker position={{ lat: myLocation?.lat || -23.432, lng: myLocation?.lng || -45.083 }} icon={getTruckIcon(isOnline)} />
             {pontos.map((p) => {
               if (!p.lat || !p.lng || isNaN(Number(p.lat)) || isNaN(Number(p.lng))) return null;
-              const lat = Number(p.lat);
-              const lng = Number(p.lng);
               return (
                 <Marker
                   key={p.id}
-                  position={[lat, lng]}
+                  position={{ lat: Number(p.lat), lng: Number(p.lng) }}
                   icon={getPinIcon(p.material)}
-                  eventHandlers={{ click: () => setSelectedPonto(p) }}
-                >
-                {selectedPonto?.id === p.id && (
-                  <Popup eventHandlers={{ remove: () => setSelectedPonto(null) }}>
-                    <div style={{ padding: 4, minWidth: 180, fontFamily: "DM Sans" }}>
-                      <p style={{ fontSize: 13, fontWeight: 600, color: "#0B1B3E" }}>
-                        {selectedPonto.address}
-                      </p>
-                      <p style={{ fontSize: 12, color: "#5B6178", marginTop: 4 }}>
-                        {getMaterial(selectedPonto.material).emoji}{" "}
-                        {getMaterial(selectedPonto.material).nome}
-                      </p>
-                      {selectedPonto.horarioPrevisto && (
-                        <p style={{ fontSize: 11, color: "#0DB87E", fontWeight: 600, marginTop: 4 }}>
-                          ⏰ Previsto: {selectedPonto.horarioPrevisto}
-                        </p>
-                      )}
-                      {selectedPonto.status === "aguardando" ? (
-                        <button
-                          onClick={() => setShowAgendarModal(selectedPonto.id)}
-                          style={{
-                            marginTop: 8,
-                            width: "100%",
-                            padding: "6px 10px",
-                            borderRadius: 8,
-                            background: "#0DB87E",
-                            border: "none",
-                            color: "white",
-                            fontFamily: "DM Sans",
-                            fontWeight: 600,
-                            fontSize: 12,
-                            cursor: "pointer",
-                          }}
-                        >
-                          Agendar Coleta
-                        </button>
-                      ) : (
-                        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
-                          <button
-                            onClick={() => concluirColeta(selectedPonto.id)}
-                            style={{
-                              width: "100%",
-                              padding: "6px 10px",
-                              borderRadius: 8,
-                              background: "#0DB87E",
-                              border: "none",
-                              color: "white",
-                              fontFamily: "DM Sans",
-                              fontWeight: 600,
-                              fontSize: 12,
-                              cursor: "pointer",
-                            }}
-                          >
-                            ✅ Concluir Coleta
-                          </button>
-                          <button
-                            onClick={() => cancelarAgendamento(selectedPonto.id)}
-                            style={{
-                              width: "100%",
-                              padding: "4px 8px",
-                              borderRadius: 8,
-                              border: "1px solid #E84040",
-                              background: "transparent",
-                              color: "#E84040",
-                              fontFamily: "DM Sans",
-                              fontSize: 11,
-                              cursor: "pointer",
-                            }}
-                          >
-                            Cancelar
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </Popup>
-                )}
-              </Marker>
-            );
-          })}
-        </MapContainer>
+                  onClick={() => setSelectedPonto(p)}
+                />
+              );
+            })}
+          </UBTMap>
       )}
       </div>
 

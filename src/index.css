@@ -145,10 +145,6 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Fix for Leaflet maps overlapping UI globally */
-  .leaflet-container {
-    z-index: 10 !important;
-  }
 }
 
 @layer utilities {
