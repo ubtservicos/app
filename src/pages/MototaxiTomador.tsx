@@ -1214,6 +1214,30 @@ const MototaxiTomadorPage = () => {
       return;
     }
 
+    // Broadcast de contingência instantâneo para prestadores online
+    try {
+      const broadcastChan = supabase.channel('mototaxi_chamados_broadcast');
+      broadcastChan.subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          broadcastChan.send({
+            type: 'broadcast',
+            event: 'new_chamado',
+            payload: {
+              id: data.id,
+              type: data.type || state.type,
+              origin: data.origin,
+              destination: data.destination,
+              distance_km: data.distance_km,
+              duration_min: data.duration_min,
+              estimated_price: data.estimated_price,
+            }
+          });
+        }
+      });
+    } catch (e) {
+      console.warn('Erro ao enviar broadcast do chamado:', e);
+    }
+
     trackEvent("ride_requested", "operational", { vertical: "mototaxi", type: state.type, price: state.estimatedPrice, distance_km: state.distanceKm });
     logSystem("INFO", "MOTOTAXI", "ride_requested", "success", duration, undefined, undefined, { type: state.type, price: state.estimatedPrice });
 

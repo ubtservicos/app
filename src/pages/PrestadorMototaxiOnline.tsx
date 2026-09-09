@@ -49,6 +49,32 @@ const Sheet = ({ children }: { children: React.ReactNode }) => (
   </div>
 );
 
+const playChamadoSound = () => {
+  try {
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      (navigator as Navigator).vibrate?.([300, 150, 300, 150, 300]);
+    }
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (AudioContextClass) {
+      const audioCtx = new AudioContextClass();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.15); // A5
+      osc.frequency.setValueAtTime(1174.66, audioCtx.currentTime + 0.3); // D6
+      gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.6);
+    }
+  } catch (e) {
+    // ignore audio block
+  }
+};
+
 const ChamadoModal = ({
   chamado,
   onAccept,
@@ -57,9 +83,7 @@ const ChamadoModal = ({
   const [seconds, setSeconds] = useState(60);
 
   useEffect(() => {
-    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-      try { (navigator as Navigator).vibrate?.([200, 100, 200]); } catch { /* noop */ }
-    }
+    playChamadoSound();
   }, []);
 
   useEffect(() => {
@@ -192,9 +216,9 @@ const PrestadorMototaxiOnline = () => {
     }
   }, [user.isLoading, user.uid, user.kycStatus, navigate]);
 
-  // GPS watch (only if approved)
+  // GPS watch (se logado)
   useEffect(() => {
-    if (user.kycStatus !== "approved") return;
+    if (!user.uid) return;
     if (!navigator.geolocation) return;
     try {
       watchIdRef.current = navigator.geolocation.watchPosition(
@@ -208,7 +232,7 @@ const PrestadorMototaxiOnline = () => {
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
     };
-  }, [user.kycStatus]);
+  }, [user.uid]);
 
   const activeSessionIdRef = useRef<string | null>(null);
 
@@ -304,7 +328,7 @@ const PrestadorMototaxiOnline = () => {
     };
   }, [user.uid, myLocation]);
 
-  // Escutar chamados reais em tempo real
+  // Escutar chamados reais em tempo real e polling de contingência a cada 3s
   useEffect(() => {
     if (!user.uid) return;
 
@@ -322,14 +346,18 @@ const PrestadorMototaxiOnline = () => {
           const c = data[0];
           const originObj = typeof c.origin === 'string' ? JSON.parse(c.origin) : c.origin;
           const destObj = typeof c.destination === 'string' ? JSON.parse(c.destination) : c.destination;
-          setChamado({
-            id: c.id,
-            type: c.type,
-            origin: originObj?.address || (typeof originObj === 'string' ? originObj : 'Origem'),
-            destination: destObj?.address || (typeof destObj === 'string' ? destObj : 'Destino'),
-            distanceKm: Number(c.distance_km || 0),
-            durationMin: Number(c.duration_min || 0),
-            price: Number(c.estimated_price || 0)
+          setChamado((prev) => {
+            if (prev && prev.id === c.id) return prev;
+            playChamadoSound();
+            return {
+              id: c.id,
+              type: c.type || 'carona',
+              origin: originObj?.address || (typeof originObj === 'string' ? originObj : 'Origem'),
+              destination: destObj?.address || (typeof destObj === 'string' ? destObj : 'Destino'),
+              distanceKm: Number(c.distance_km || 0),
+              durationMin: Number(c.duration_min || 0),
+              price: Number(c.estimated_price || 0)
+            };
           });
         }
       } catch (err) {
@@ -338,38 +366,39 @@ const PrestadorMototaxiOnline = () => {
     };
 
     fetchActiveChamado();
+    const pollInterval = setInterval(fetchActiveChamado, 3000);
+    return () => clearInterval(pollInterval);
   }, [user.uid]);
 
-  // Realtime subscription with auto-reconnect (replaces raw .subscribe())
+  // Realtime subscription com auto-reconnect para novas inserções e atualizações de corrida
   const handleNewCorrida = useCallback((payload: any) => {
     console.log('Evento Realtime Recebido:', payload);
-    if (payload.new) {
-      const c = payload.new;
-      if (c.status === 'searching' && !c.prestador_id) {
-        try {
-          const originObj = typeof c.origin === 'string' ? JSON.parse(c.origin) : c.origin;
-          const destObj = typeof c.destination === 'string' ? JSON.parse(c.destination) : c.destination;
-          setChamado({
-            id: c.id,
-            type: c.type,
-            origin: originObj?.address || (typeof originObj === 'string' ? originObj : 'Origem'),
-            destination: destObj?.address || (typeof destObj === 'string' ? destObj : 'Destino'),
-            distanceKm: Number(c.distance_km || 0),
-            durationMin: Number(c.duration_min || 0),
-            price: Number(c.estimated_price || 0)
-          });
-        } catch (err) {
-          console.error("Erro ao parsear chamada recebida:", err);
-        }
-      } else {
-        setChamado((prev) => (prev && prev.id === c.id ? null : prev));
+    const c = payload.new;
+    if (c && c.status === 'searching' && !c.prestador_id) {
+      try {
+        const originObj = typeof c.origin === 'string' ? JSON.parse(c.origin) : c.origin;
+        const destObj = typeof c.destination === 'string' ? JSON.parse(c.destination) : c.destination;
+        setChamado({
+          id: c.id,
+          type: c.type || 'carona',
+          origin: originObj?.address || (typeof originObj === 'string' ? originObj : 'Origem'),
+          destination: destObj?.address || (typeof destObj === 'string' ? destObj : 'Destino'),
+          distanceKm: Number(c.distance_km || 0),
+          durationMin: Number(c.duration_min || 0),
+          price: Number(c.estimated_price || 0)
+        });
+        playChamadoSound();
+      } catch (err) {
+        console.error("Erro ao parsear chamada recebida:", err);
       }
+    } else if (c && c.status !== 'searching') {
+      setChamado((prev) => (prev && prev.id === c.id ? null : prev));
     }
   }, []);
 
   useRealtimeChannel(
-    'public:mototaxi_corridas_insert',
-    { event: 'INSERT', table: 'mototaxi_corridas' },
+    `public:mototaxi_corridas_prestador_${user.uid || 'online'}`,
+    { event: '*', table: 'mototaxi_corridas' },
     handleNewCorrida,
     (status) => {
       console.log('Status do Canal Realtime (mototaxi_corridas):', status);
@@ -377,6 +406,34 @@ const PrestadorMototaxiOnline = () => {
       if (status === 'error') toast.error('Conexão perdida. Atualize a página.');
     }
   );
+
+  // Canal Broadcast de Contingência para disparo instantâneo Tomador -> Prestador
+  useEffect(() => {
+    const broadcastChan = supabase
+      .channel('mototaxi_chamados_broadcast')
+      .on('broadcast', { event: 'new_chamado' }, ({ payload }) => {
+        console.log('[Broadcast] Novo chamado recebido:', payload);
+        if (payload && payload.id) {
+          const originObj = typeof payload.origin === 'string' ? JSON.parse(payload.origin) : payload.origin;
+          const destObj = typeof payload.destination === 'string' ? JSON.parse(payload.destination) : payload.destination;
+          setChamado({
+            id: payload.id,
+            type: payload.type || 'carona',
+            origin: originObj?.address || (typeof originObj === 'string' ? originObj : 'Origem'),
+            destination: destObj?.address || (typeof destObj === 'string' ? destObj : 'Destino'),
+            distanceKm: Number(payload.distance_km || 0),
+            durationMin: Number(payload.duration_min || 0),
+            price: Number(payload.estimated_price || 0)
+          });
+          playChamadoSound();
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(broadcastChan);
+    };
+  }, []);
 
   const goOffline = async () => {
     if (watchIdRef.current !== null && navigator.geolocation) {
