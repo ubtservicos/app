@@ -12,6 +12,7 @@ interface Props {
   status: RideStatus;
   center: { lat: number; lng: number };
   onlineDrivers?: any[];
+  height?: string;
 }
 
 const MapFallback = ({ status, center }: { status: RideStatus; center: { lat: number; lng: number } }) => (
@@ -49,6 +50,7 @@ const MototaxiMap = ({
   status,
   center,
   onlineDrivers,
+  height = '100%',
 }: Props) => {
   const [polyline, setPolyline] = useState<[number, number][]>([]);
 
@@ -71,7 +73,7 @@ const MototaxiMap = ({
     : (isValidLatLng(center?.lat, center?.lng) ? { lat: Number(center.lat), lng: Number(center.lng) } : UBATUBA_CENTER);
 
   return (
-    <UBTMap center={mapCenter} zoom={15} style={{ width: '100%', height: '400px' }}>
+    <UBTMap center={mapCenter} zoom={15} style={{ width: '100%', height }}>
       {origin && isValidLatLng(origin.lat, origin.lng) && (
         <Marker position={{ lat: Number(origin.lat), lng: Number(origin.lng) }} icon={tomadorIcon} />
       )}

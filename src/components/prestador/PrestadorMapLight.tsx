@@ -9,8 +9,8 @@ interface Props {
   origin?: { lat: number; lng: number } | null;
   destination?: { lat: number; lng: number } | null;
   routeFrom?: { lat: number; lng: number } | null;
-  routeTo?: { lat: number; lng: number } | null;
   providerType?: 'mototaxi' | 'ambulante' | 'coco';
+  height?: string;
 }
 
 const Fallback = ({ myLocation }: { myLocation: { lat: number; lng: number } | null }) => (
@@ -38,7 +38,15 @@ const Fallback = ({ myLocation }: { myLocation: { lat: number; lng: number } | n
   </div>
 );
 
-const PrestadorMapLight = ({ myLocation, origin, destination, routeFrom, routeTo, providerType = 'mototaxi' }: Props) => {
+const PrestadorMapLight = ({
+  myLocation,
+  origin,
+  destination,
+  routeFrom,
+  routeTo,
+  providerType = 'mototaxi',
+  height = '100%',
+}: Props) => {
   const [polyline, setPolyline] = useState<[number, number][]>([]);
 
   useEffect(() => {
@@ -58,7 +66,7 @@ const PrestadorMapLight = ({ myLocation, origin, destination, routeFrom, routeTo
   const center = { lat: Number(myLocation.lat), lng: Number(myLocation.lng) };
 
   return (
-    <UBTMap center={center} zoom={15} style={{ width: '100%', height: '400px' }}>
+    <UBTMap center={center} zoom={15} style={{ width: '100%', height }}>
       {myLocation && isValidLatLng(myLocation.lat, myLocation.lng) && (
         <Marker
           position={{ lat: Number(myLocation.lat), lng: Number(myLocation.lng) }}

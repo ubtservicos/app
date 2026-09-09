@@ -21,7 +21,7 @@ import MototaxiMap from "@/components/mototaxi/MototaxiMap";
 import SplitBreakdown from "@/components/mototaxi/SplitBreakdown";
 import { calcPrice, formatBRL } from "@/utils/ride";
 import { useRide, type RideType } from "@/contexts/RideContext";
-import { searchAddresses } from "@/lib/geoService";
+import { searchAddressesWithSessionToken, getPlaceDetails, type AutocompleteSuggestion } from "@/lib/geoService";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { createPreference, calculateSplit } from "@/lib/mercadoPago";
 import { supabase } from "@/lib/supabase";
@@ -88,8 +88,21 @@ const IdleSheet = ({
   const canConfirm = !!type && !!origin && !!destination;
 
   const [destQuery, setDestQuery] = useState(destination?.address || "");
-  const [destResults, setDestResults] = useState<Array<{ label: string; lat: number; lng: number }>>([]);
+  const [destResults, setDestResults] = useState<AutocompleteSuggestion[]>([]);
   const [searchingDest, setSearchingDest] = useState(false);
+  const destSessionTokenRef = useRef<any>(null);
+
+  const initDestSessionToken = () => {
+    if (typeof window !== 'undefined' && (window as any).google?.maps?.places?.AutocompleteSessionToken) {
+      destSessionTokenRef.current = new (window as any).google.maps.places.AutocompleteSessionToken();
+    } else {
+      destSessionTokenRef.current = 'session_' + Math.random().toString(36).substring(2, 15);
+    }
+  };
+
+  useEffect(() => {
+    initDestSessionToken();
+  }, []);
 
   useEffect(() => {
     // If the input matches the confirmed destination, we don't search again
@@ -97,38 +110,49 @@ const IdleSheet = ({
       setDestResults([]);
       return;
     }
-    if (destQuery.length < 3) {
+    if (destQuery.length < 2) {
       setDestResults([]);
       return;
     }
+    if (!destSessionTokenRef.current) {
+      initDestSessionToken();
+    }
     const timer = setTimeout(() => {
       setSearchingDest(true);
-      searchAddresses(destQuery).then((res) => {
+      searchAddressesWithSessionToken(destQuery, destSessionTokenRef.current).then((res) => {
         setDestResults(res);
         setSearchingDest(false);
       });
-    }, 600);
+    }, 300);
     return () => clearTimeout(timer);
   }, [destQuery, destination]);
 
-  const handleSelectDest = (r: { label: string; lat: number; lng: number }) => {
+  const handleSelectDest = async (r: AutocompleteSuggestion) => {
+    setSearchingDest(true);
+    const details = await getPlaceDetails(r.placeId, destSessionTokenRef.current);
+    initDestSessionToken();
+
     const userNumberMatch = destQuery.match(/(?:,\s*|n[º°]?\s*|\s+)(\d+[a-zA-Z]?)(?:\b|$)/i) || destQuery.match(/(\d+)/);
     const userTypedNumber = userNumberMatch ? userNumberMatch[1] : null;
 
-    let finalAddress = r.label;
-    if (userTypedNumber && !r.label.match(new RegExp(`\\b${userTypedNumber}\\b`))) {
-      const parts = r.label.split(',');
+    let finalAddress = details?.formattedAddress || r.label;
+    if (userTypedNumber && !finalAddress.match(new RegExp(`\\b${userTypedNumber}\\b`))) {
+      const parts = finalAddress.split(',');
       if (parts.length > 1) {
         parts[0] = `${parts[0].trim()}, ${userTypedNumber}`;
         finalAddress = parts.join(', ');
       } else {
-        finalAddress = `${r.label}, ${userTypedNumber}`;
+        finalAddress = `${finalAddress}, ${userTypedNumber}`;
       }
     }
 
-    setDestination({ lat: r.lat, lng: r.lng, address: finalAddress });
+    const lat = details?.lat ?? UBATUBA_FALLBACK.lat;
+    const lng = details?.lng ?? UBATUBA_FALLBACK.lng;
+
+    setDestination({ lat, lng, address: finalAddress });
     setDestQuery(finalAddress);
     setDestResults([]);
+    setSearchingDest(false);
   };
 
   return (
@@ -217,18 +241,19 @@ const IdleSheet = ({
             style={{
               background: "#18181B",
               border: "1px solid #27272A",
-              maxHeight: 180,
+              maxHeight: 200,
               overflowY: "auto",
             }}
           >
             {destResults.map((r, i) => (
               <button
-                key={i}
+                key={r.placeId || `${r.label}-${i}`}
                 type="button"
                 onClick={() => handleSelectDest(r)}
-                className="w-full text-left px-3 py-3 border-b border-white/5 last:border-none font-sans text-[13px] text-white/90 hover:bg-white/10"
+                className="w-full text-left px-3 py-2.5 border-b border-white/5 last:border-none hover:bg-white/10"
               >
-                {r.label}
+                <div className="font-sans text-[13px] font-semibold text-white/90">{r.mainText || r.label}</div>
+                {r.secondaryText && <div className="font-sans text-[11px] text-white/50">{r.secondaryText}</div>}
               </button>
             ))}
           </div>

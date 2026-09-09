@@ -9,15 +9,16 @@ interface Props {
   sessions: AmbulanteSession[];
   onMarkerClick?: (s: AmbulanteSession) => void;
   selectedId?: string | null;
+  height?: string;
 }
 
-const AmbulantesMap = ({ center, sessions, onMarkerClick }: Props) => {
+const AmbulantesMap = ({ center, sessions, onMarkerClick, height = '100%' }: Props) => {
   const mapCenter = center && isValidLatLng(center.lat, center.lng)
     ? { lat: Number(center.lat), lng: Number(center.lng) }
     : UBATUBA_CENTER;
 
   return (
-    <UBTMap center={mapCenter} zoom={15} style={{ width: '100%', height: '400px' }}>
+    <UBTMap center={mapCenter} zoom={15} style={{ width: '100%', height }}>
       <Marker position={mapCenter} icon={tomadorIcon} />
       {sessions.map((s) => {
         if (!s?.location || !isValidLatLng(s.location.lat, s.location.lng)) return null;
