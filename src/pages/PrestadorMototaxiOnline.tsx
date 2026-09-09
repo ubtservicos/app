@@ -328,19 +328,26 @@ const PrestadorMototaxiOnline = () => {
     };
   }, [user.uid, myLocation]);
 
-  // Escutar chamados reais em tempo real e polling de contingência a cada 3s
+  // Escutar chamados reais em tempo real e polling de contingência a cada 2.5s
   useEffect(() => {
     if (!user.uid) return;
 
     const fetchActiveChamado = async () => {
       try {
-        const { data, error } = await supabase
+        let query = supabase
           .from('mototaxi_corridas')
           .select('*')
           .in('status', ['searching', 'pending', 'buscando', 'solicitado'])
-          .is('prestador_id', null)
           .order('created_at', { ascending: false })
           .limit(1);
+
+        if (user.uid) {
+          query = query.or(`prestador_id.is.null,prestador_id.eq.${user.uid}`);
+        } else {
+          query = query.is('prestador_id', null);
+        }
+
+        const { data, error } = await query;
 
         if (!error && data && data.length > 0) {
           const c = data[0];
@@ -366,7 +373,7 @@ const PrestadorMototaxiOnline = () => {
     };
 
     fetchActiveChamado();
-    const pollInterval = setInterval(fetchActiveChamado, 3000);
+    const pollInterval = setInterval(fetchActiveChamado, 2500);
     return () => clearInterval(pollInterval);
   }, [user.uid]);
 
@@ -375,7 +382,8 @@ const PrestadorMototaxiOnline = () => {
     console.log('Evento Realtime Recebido:', payload);
     const c = payload.new;
     const isPending = c && ['searching', 'pending', 'buscando', 'solicitado'].includes(c.status);
-    if (c && isPending && !c.prestador_id) {
+    const isTargetPrestador = c && (!c.prestador_id || c.prestador_id === user.uid);
+    if (c && isPending && isTargetPrestador) {
       try {
         const originObj = typeof c.origin === 'string' ? JSON.parse(c.origin) : c.origin;
         const destObj = typeof c.destination === 'string' ? JSON.parse(c.destination) : c.destination;
@@ -395,7 +403,7 @@ const PrestadorMototaxiOnline = () => {
     } else if (c && !isPending) {
       setChamado((prev) => (prev && prev.id === c.id ? null : prev));
     }
-  }, []);
+  }, [user.uid]);
 
   useRealtimeChannel(
     `public:mototaxi_corridas_prestador_${user.uid || 'online'}`,
