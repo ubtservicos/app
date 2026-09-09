@@ -4,13 +4,10 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 
 // Dynamic PWA Manifest Plugin
-function dynamicManifestPlugin(mode: string) {
-  // Padrão do framework: em build ou execução de produção, gerar estritamente UBT
-  const isProd = mode === "production" || process.env.NODE_ENV === "production";
-
+function dynamicManifestPlugin() {
   const manifestData = {
-    short_name: isProd ? "UBT" : "UBT Homolog",
-    name: isProd ? "UBT — O Superapp do Trabalhador" : "UBT Homolog — O Superapp do Trabalhador",
+    short_name: "UBT",
+    name: "UBT — O Superapp do Trabalhador",
     icons: [
       {
         src: "/favicon.png",
@@ -65,7 +62,7 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     react(),
-    dynamicManifestPlugin(mode),
+    dynamicManifestPlugin(),
     mode === "development" && componentTagger()
   ].filter(Boolean),
   resolve: {
