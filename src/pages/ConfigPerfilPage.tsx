@@ -1,6 +1,26 @@
-import { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { User, Phone, Mail, Lock, Camera, ChevronDown, Eye, EyeOff, Share2, Check, Heart, Copy, MessageSquare, Instagram, Facebook, QrCode, X } from "lucide-react";
+import {
+  User,
+  Phone,
+  Mail,
+  Lock,
+  Camera,
+  ChevronDown,
+  Eye,
+  EyeOff,
+  Check,
+  Heart,
+  Copy,
+  MessageSquare,
+  Instagram,
+  Facebook,
+  QrCode,
+  X,
+  MapPin,
+  Waves,
+  Briefcase
+} from "lucide-react";
 import { useTheme } from "@/hooks/useTheme";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import PageHeader from "@/components/settings/PageHeader";
@@ -9,7 +29,7 @@ import { useSimpleToast } from "@/hooks/useToast2";
 import Toast from "@/components/auth/Toast";
 import { maskPhone } from "@/utils/masks";
 import { supabase } from "@/lib/supabase";
-
+import { BAIRROS_LIST, PRAIAS_LIST } from "@/constants/ubatubaLocations";
 
 const Field = ({
   label,
@@ -73,6 +93,80 @@ const Field = ({
   );
 };
 
+const SelectField = ({
+  label,
+  icon: Icon,
+  value,
+  onChange,
+  options,
+  placeholder = "Selecione...",
+}: {
+  label: string;
+  icon: any;
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  placeholder?: string;
+}) => {
+  const t = useTheme();
+  return (
+    <div>
+      <label
+        style={{
+          fontFamily: "DM Sans",
+          fontSize: 12,
+          fontWeight: 500,
+          color: t.subtle,
+          display: "block",
+          marginBottom: 6,
+        }}
+      >
+        {label}
+      </label>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          background: t.inputBg,
+          border: `1px solid ${t.inputBdr}`,
+          borderRadius: 12,
+          padding: "0 14px",
+          height: 48,
+          position: "relative",
+        }}
+      >
+        <Icon size={18} color={t.muted} style={{ flexShrink: 0 }} />
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          style={{
+            flex: 1,
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            color: value ? t.text : t.muted,
+            fontFamily: "DM Sans",
+            fontSize: 14,
+            cursor: "pointer",
+            appearance: "none",
+          }}
+        >
+          <option value="" style={{ background: t.bg, color: t.text }}>
+            {placeholder}
+          </option>
+          {options.map((opt) => (
+            <option key={opt} value={opt} style={{ background: t.bg, color: t.text }}>
+              {opt}
+            </option>
+          ))}
+        </select>
+        <ChevronDown size={18} color={t.muted} style={{ pointerEvents: "none" }} />
+      </div>
+    </div>
+  );
+};
+
 const passwordStrength = (s: string) => {
   let score = 0;
   if (s.length >= 8) score++;
@@ -89,28 +183,34 @@ const ConfigPerfilPage = () => {
   const [avatar, setAvatar] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const [showQrModal, setShowQrModal] = useState(false);
+  const [showPraiasModal, setShowPraiasModal] = useState(false);
+  const [searchPraia, setSearchPraia] = useState("");
 
   const initial = {
     nome: user.name,
     telefone: "",
     email: user.email || "",
+    bairro_moradia: "",
+    bairro_trabalho: "",
+    praias_frequenta: "",
   };
   const [form, setForm] = useState(initial);
+  const [initialLoaded, setInitialLoaded] = useState(initial);
 
   useEffect(() => {
     if (!user.uid) return;
-    
+
     const loadProfileDetails = async () => {
       try {
         const { data: profileData } = await supabase
           .from("profiles")
-          .select("name, phone")
+          .select("name, phone, bairro_moradia, bairro_trabalho, praias_frequenta")
           .eq("id", user.uid)
           .maybeSingle();
 
         const { data: usuarioData } = await supabase
           .from("usuarios")
-          .select("nome")
+          .select("nome, bairro_moradia, bairro_trabalho, praias_frequenta")
           .eq("id", user.uid)
           .maybeSingle();
 
@@ -120,11 +220,21 @@ const ConfigPerfilPage = () => {
         const nameVal = usuarioData?.nome || profileData?.name || authUser?.user_metadata?.full_name || user.name || "";
         const emailVal = authUser?.email || user.email || "";
 
-        setForm({
+        const bairroMoradiaVal = profileData?.bairro_moradia || usuarioData?.bairro_moradia || "";
+        const bairroTrabalhoVal = profileData?.bairro_trabalho || usuarioData?.bairro_trabalho || "";
+        const praiasVal = profileData?.praias_frequenta || usuarioData?.praias_frequenta || "";
+
+        const loaded = {
           nome: nameVal,
           telefone: maskPhone(phoneVal),
-          email: emailVal
-        });
+          email: emailVal,
+          bairro_moradia: bairroMoradiaVal,
+          bairro_trabalho: bairroTrabalhoVal,
+          praias_frequenta: praiasVal,
+        };
+
+        setForm(loaded);
+        setInitialLoaded(loaded);
       } catch (e) {
         console.error("Error loading profile fields:", e);
       }
@@ -176,7 +286,7 @@ const ConfigPerfilPage = () => {
     .join("")
     .toUpperCase();
 
-  const dirty = JSON.stringify(form) !== JSON.stringify(initial);
+  const dirty = JSON.stringify(form) !== JSON.stringify(initialLoaded);
 
   const onPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -193,7 +303,7 @@ const ConfigPerfilPage = () => {
       const updateData: any = {
         data: {
           full_name: form.nome,
-          telefone: form.telefone.replace(/\D/g, "")
+          telefone: form.telefone.replace(/\D/g, ""),
         }
       };
 
@@ -204,25 +314,37 @@ const ConfigPerfilPage = () => {
       const { error: authErr } = await supabase.auth.updateUser(updateData);
       if (authErr) throw authErr;
 
-      const { error: usrErr } = await supabase
-        .from("usuarios")
-        .update({ nome: form.nome })
-        .eq("id", user.uid);
-      if (usrErr) throw usrErr;
-
+      // 1. Update tabela profiles
       const { error: profErr } = await supabase
         .from("profiles")
         .update({
           name: form.nome,
-          phone: form.telefone.replace(/\D/g, "")
+          phone: form.telefone.replace(/\D/g, ""),
+          bairro_moradia: form.bairro_moradia || null,
+          bairro_trabalho: form.bairro_trabalho || null,
+          praias_frequenta: form.praias_frequenta || null,
+          updated_at: new Date().toISOString(),
         })
         .eq("id", user.uid);
       if (profErr) throw profErr;
 
-      showToast("Perfil atualizado! ✓");
+      // 2. Update tabela usuarios
+      const { error: usrErr } = await supabase
+        .from("usuarios")
+        .update({
+          nome: form.nome,
+          bairro_moradia: form.bairro_moradia || null,
+          bairro_trabalho: form.bairro_trabalho || null,
+          praias_frequenta: form.praias_frequenta || null,
+        })
+        .eq("id", user.uid);
+      if (usrErr) console.warn("Aviso ao atualizar tabela usuarios:", usrErr);
+
+      setInitialLoaded({ ...form });
+      showToast("Perfil atualizado com sucesso! ✓");
     } catch (err: any) {
-      console.error(err);
-      showToast("Erro ao salvar alterações");
+      console.error("Erro ao salvar perfil:", err);
+      showToast(err.message || "Erro ao salvar alterações");
     } finally {
       setSaving(false);
     }
@@ -253,6 +375,14 @@ const ConfigPerfilPage = () => {
   const score = passwordStrength(pwd.nova);
   const strengthLabel = ["", "Fraca", "Razoável", "Forte"][score];
   const strengthColor = ["", "#E84040", "#F5A623", "#0DB87E"][score];
+
+  const selectedPraiasList = form.praias_frequenta
+    ? form.praias_frequenta.split(",").map((p) => p.trim()).filter(Boolean)
+    : [];
+
+  const filteredPraias = PRAIAS_LIST.filter((p) =>
+    p.toLowerCase().includes(searchPraia.toLowerCase())
+  );
 
   return (
     <div style={{ background: t.bg, minHeight: "100svh" }}>
@@ -332,6 +462,7 @@ const ConfigPerfilPage = () => {
           </button>
         </div>
 
+        {/* Dados Pessoais */}
         <div style={{ marginTop: 28, display: "flex", flexDirection: "column", gap: 16 }}>
           <Field label="Nome completo" icon={User} value={form.nome} onChange={(v) => setForm({ ...form, nome: v })} />
           <Field
@@ -364,6 +495,79 @@ const ConfigPerfilPage = () => {
             >
               Verificado ✓
             </span>
+          </div>
+
+          {/* Localização & Preferências */}
+          <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 16 }}>
+            <SelectField
+              label="Bairro de Moradia"
+              icon={MapPin}
+              value={form.bairro_moradia}
+              onChange={(v) => setForm({ ...form, bairro_moradia: v })}
+              options={BAIRROS_LIST}
+              placeholder="Selecione seu bairro de residência..."
+            />
+
+            <SelectField
+              label="Bairro de Trabalho"
+              icon={Briefcase}
+              value={form.bairro_trabalho}
+              onChange={(v) => setForm({ ...form, bairro_trabalho: v })}
+              options={BAIRROS_LIST}
+              placeholder="Selecione seu bairro de trabalho..."
+            />
+
+            {/* Praias que Frequenta */}
+            <div>
+              <label
+                style={{
+                  fontFamily: "DM Sans",
+                  fontSize: 12,
+                  fontWeight: 500,
+                  color: t.subtle,
+                  display: "block",
+                  marginBottom: 6,
+                }}
+              >
+                Praias que Frequenta
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowPraiasModal(true)}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 10,
+                  background: t.inputBg,
+                  border: `1px solid ${t.inputBdr}`,
+                  borderRadius: 12,
+                  padding: "12px 14px",
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, overflow: "hidden" }}>
+                  <Waves size={18} color={t.muted} style={{ flexShrink: 0 }} />
+                  <span
+                    style={{
+                      fontFamily: "DM Sans",
+                      fontSize: 14,
+                      color: selectedPraiasList.length > 0 ? t.text : t.muted,
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {selectedPraiasList.length > 0
+                      ? selectedPraiasList.join(", ")
+                      : "Selecione as praias que frequenta..."}
+                  </span>
+                </div>
+                <ChevronDown size={18} color={t.muted} />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -409,7 +613,6 @@ const ConfigPerfilPage = () => {
           </p>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10, marginTop: 8 }}>
-            {/* Copiar Link */}
             <a
               href="#"
               onClick={(e) => {
@@ -437,7 +640,6 @@ const ConfigPerfilPage = () => {
               {copiedLink ? "Copiado!" : "Copiar Link"}
             </a>
 
-            {/* WhatsApp */}
             <a
               href={`https://wa.me/?text=${encodeURIComponent(`Olá! Cadastre-se na UBT Serviços utilizando meu link de convite e tenha acesso aos melhores profissionais de Ubatuba: ${window.location.origin}/cadastro?ref=${user.uid}`)}`}
               target="_blank"
@@ -463,7 +665,6 @@ const ConfigPerfilPage = () => {
               WhatsApp
             </a>
 
-            {/* Instagram */}
             <a
               href="https://instagram.com"
               target="_blank"
@@ -494,7 +695,6 @@ const ConfigPerfilPage = () => {
               Instagram
             </a>
 
-            {/* Facebook */}
             <a
               href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${window.location.origin}/cadastro?ref=${user.uid}`)}`}
               target="_blank"
@@ -520,7 +720,6 @@ const ConfigPerfilPage = () => {
               Facebook
             </a>
 
-            {/* QR Code de Indicação */}
             <button
               type="button"
               onClick={() => setShowQrModal(true)}
@@ -548,6 +747,7 @@ const ConfigPerfilPage = () => {
           </div>
         </div>
 
+        {/* Trocar Senha */}
         <div style={{ marginTop: 24 }}>
           <SettingsGroup>
             <button
@@ -730,8 +930,149 @@ const ConfigPerfilPage = () => {
           {saving ? "Salvando..." : "Salvar alterações"}
         </button>
       </div>
+
       <Toast message={toast.msg} visible={toast.visible} />
 
+      {/* Modal de Seleção de Praias */}
+      {showPraiasModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(0,0,0,0.65)",
+            backdropFilter: "blur(4px)",
+            padding: 20,
+          }}
+        >
+          <div
+            style={{
+              background: t.surface,
+              borderRadius: 24,
+              width: "100%",
+              maxWidth: 420,
+              maxHeight: "85vh",
+              padding: 24,
+              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.3)",
+              display: "flex",
+              flexDirection: "column",
+              position: "relative",
+              border: `1px solid ${t.border}`,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <h3 style={{ fontFamily: "Syne", fontSize: 17, fontWeight: 700, color: t.text, margin: 0 }}>
+                Praias que Costuma Frequentar
+              </h3>
+              <button
+                onClick={() => setShowPraiasModal(false)}
+                style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex" }}
+              >
+                <X size={20} color={t.text} />
+              </button>
+            </div>
+
+            <input
+              type="text"
+              placeholder="Buscar praia..."
+              value={searchPraia}
+              onChange={(e) => setSearchPraia(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "10px 14px",
+                borderRadius: 12,
+                background: t.inputBg,
+                border: `1px solid ${t.inputBdr}`,
+                color: t.text,
+                fontFamily: "DM Sans",
+                fontSize: 14,
+                outline: "none",
+                marginBottom: 12,
+              }}
+            />
+
+            <div
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                maxHeight: "45vh",
+                paddingRight: 4,
+              }}
+            >
+              {filteredPraias.map((p) => {
+                const isSelected = selectedPraiasList.includes(p);
+                return (
+                  <div
+                    key={p}
+                    onClick={() => {
+                      const next = isSelected
+                        ? selectedPraiasList.filter((x) => x !== p)
+                        : [...selectedPraiasList, p];
+                      setForm({ ...form, praias_frequenta: next.join(", ") });
+                    }}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: "10px 14px",
+                      borderRadius: 10,
+                      background: isSelected ? "rgba(13,184,126,0.12)" : t.inputBg,
+                      border: `1px solid ${isSelected ? "#0DB87E" : t.inputBdr}`,
+                      cursor: "pointer",
+                      transition: "all 150ms",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      readOnly
+                      style={{ accentColor: "#0DB87E", width: 16, height: 16, cursor: "pointer" }}
+                    />
+                    <span
+                      style={{
+                        fontFamily: "DM Sans",
+                        fontSize: 14,
+                        color: isSelected ? "#0DB87E" : t.text,
+                        fontWeight: isSelected ? 600 : 400,
+                      }}
+                    >
+                      {p}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowPraiasModal(false)}
+              style={{
+                width: "100%",
+                padding: "12px",
+                borderRadius: 12,
+                background: "#0DB87E",
+                color: "#FFF",
+                border: "none",
+                fontFamily: "DM Sans",
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: "pointer",
+                marginTop: 16,
+              }}
+            >
+              Confirmar Seleção ({selectedPraiasList.length})
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal QR Code */}
       {showQrModal && (
         <div
           style={{
@@ -798,7 +1139,7 @@ const ConfigPerfilPage = () => {
                 fontSize: 18,
                 fontWeight: 700,
                 color: t.text,
-                margin: 0,
+                margin: "0 0 8px 0",
                 textAlign: "center"
               }}
             >
@@ -811,49 +1152,51 @@ const ConfigPerfilPage = () => {
                 fontSize: 13,
                 color: t.muted,
                 textAlign: "center",
-                marginTop: 8,
-                marginBottom: 20,
-                lineHeight: 1.4
+                margin: "0 0 20px 0",
+                lineHeight: "1.4"
               }}
             >
-              Aponte a câmera do seu celular para cadastrar-se e vincular-se automaticamente como afilhado(a) da UBT!
+              Aponte a câmera do celular para este código para se cadastrar como seu afilhado.
             </p>
 
             <div
               style={{
-                background: "#FFF",
-                padding: 12,
+                padding: 16,
+                background: "#FFFFFF",
                 borderRadius: 16,
-                border: "1px solid rgba(0,0,0,0.05)",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                marginBottom: 20
+                justifyContent: "center"
               }}
             >
               <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`${window.location.origin}/cadastro?ref=${user.uid}`)}`}
-                alt="Referral QR Code"
-                style={{ width: 200, height: 200, display: "block" }}
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`${window.location.origin}/cadastro?ref=${user.uid}`)}`}
+                alt="QR Code"
+                style={{ width: 180, height: 180, display: "block" }}
               />
             </div>
 
             <button
-              onClick={() => setShowQrModal(false)}
+              onClick={() => {
+                handleShareLink();
+                setShowQrModal(false);
+              }}
               style={{
+                marginTop: 24,
                 width: "100%",
-                padding: "14px",
+                padding: "12px",
                 borderRadius: 12,
                 background: "#0DB87E",
-                color: "#FFF",
+                color: "#FFFFFF",
                 border: "none",
                 fontFamily: "Syne",
                 fontSize: 14,
-                fontWeight: 700,
+                fontWeight: 600,
                 cursor: "pointer"
               }}
             >
-              Fechar
+              Copiar Link Direto
             </button>
           </div>
         </div>

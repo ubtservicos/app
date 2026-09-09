@@ -357,6 +357,7 @@ const waitlistSchema = z.object({
   regiao_atuacao: z.array(z.string()).optional().default([]),
   praias: z.array(z.string()).optional().default([]),
   bairros: z.array(z.string()).optional().default([]),
+  bairro_trabalho: z.string().optional().default(""),
   acceptTerms: z.boolean().refine(v => v === true, "Você deve aceitar os termos"),
 }).superRefine((data, ctx) => {
   const p = data.perfil || [];
@@ -494,6 +495,7 @@ export default function Index() {
       regiao_atuacao: [],
       praias: [],
       bairros: [],
+      bairro_trabalho: "",
       acceptTerms: false,
     },
   });
@@ -828,7 +830,8 @@ export default function Index() {
         browser: parsedUA.browser,
         os: parsedUA.os,
         bairro_moradia: values.bairros && values.bairros.length > 0 ? values.bairros.join(", ") : null,
-        bairro_trabalho: values.regiao_atuacao && values.regiao_atuacao.length > 0 ? values.regiao_atuacao.join(", ") : null,
+        bairro_trabalho: values.bairro_trabalho && values.bairro_trabalho.trim().length > 0 ? values.bairro_trabalho.trim() : (values.regiao_atuacao && values.regiao_atuacao.length > 0 ? values.regiao_atuacao.join(", ") : null),
+        praias_frequenta: values.praias && values.praias.length > 0 ? values.praias.join(", ") : null,
         possui_conta_mercado_pago: typeof values.possuiContaMercadoPago === "boolean" ? values.possuiContaMercadoPago : null,
         observacoes: obsText || null
       };
@@ -1796,7 +1799,7 @@ export default function Index() {
 
               {(perfil?.includes("morador") || perfil?.includes("turista") || perfil?.includes("ambulante")) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Bairros Column */}
+                  {/* Bairros Column (Residência ou Hospedagem) */}
                   {(perfil?.includes("morador") || perfil?.includes("turista")) && (
                     <div className="w-full" id="waitlist-input-bairros">
                       <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
@@ -1824,9 +1827,34 @@ export default function Index() {
                     </div>
                   )}
 
+                  {/* Bairro de Trabalho (Condicional: Morador) */}
+                  {perfil?.includes("morador") && (
+                    <div className="w-full" id="waitlist-input-bairro-trabalho">
+                      <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
+                        Bairro de Trabalho
+                      </label>
+                      <div className="relative">
+                        <select
+                          {...register("bairro_trabalho")}
+                          className="w-full px-6 py-5 rounded-2xl bg-[#132348] border border-white/10 outline-none text-white text-base hover:border-white/20 transition-all appearance-none cursor-pointer"
+                        >
+                          <option value="" className="bg-[#0B1B3E] text-white/50">
+                            Selecione o bairro de trabalho...
+                          </option>
+                          {BAIRROS_LIST.map((b) => (
+                            <option key={b} value={b} className="bg-[#0B1B3E] text-white">
+                              {b}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown className="w-5 h-5 text-white/40 absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      </div>
+                    </div>
+                  )}
+
                   {/* Praias Column */}
                   {(perfil?.includes("ambulante") || perfil?.includes("morador") || perfil?.includes("turista")) && (
-                    <div className="w-full" id="waitlist-input-praias">
+                    <div className={`w-full ${perfil?.includes("morador") ? "md:col-span-2" : ""}`} id="waitlist-input-praias">
                       <label className="block text-xs font-mono text-white/50 uppercase tracking-widest mb-2 pl-1">
                         {perfil?.includes("ambulante") ? "Praias de atuação" : "Praias que costuma frequentar"} <span className="text-red-500">*</span>
                       </label>
