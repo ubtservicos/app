@@ -283,6 +283,10 @@ const PrestadorHome = () => {
             .from('mototaxi_sessoes')
             .insert({ prestador_id: user.uid, is_online: nextStatus, updated_at: new Date().toISOString() });
         }
+
+        if (nextStatus) {
+          navigate('/app/prestador/mototaxi/online');
+        }
       } else if (key === 'ambulante') {
         const { data: existing } = await supabase
           .from('ambulante_sessions')

@@ -216,6 +216,10 @@ const PrestadorMototaxiOnline = () => {
     }
   }, [user.isLoading, user.uid, user.kycStatus, navigate]);
 
+  useEffect(() => {
+    console.log('[AUDIT Prestador] Componente montado com sucesso, user_id:', user?.uid || (user as any)?.id, 'user:', user);
+  }, [user]);
+
   // GPS watch (se logado)
   useEffect(() => {
     if (!user.uid) return;
@@ -248,30 +252,19 @@ const PrestadorMototaxiOnline = () => {
       }
 
       try {
-        let sessionId = activeSessionIdRef.current;
-        console.log('[AUDIT PrestadorMototaxiOnline] Sincronizando sessão online no Supabase (mototaxi_sessoes):', {
+        console.log('[AUDIT Prestador] Sincronizando sessão online no Supabase (mototaxi_sessoes):', {
           prestador_id: user.uid,
           lat: myLocation.lat,
-          lng: myLocation.lng,
-          sessionId
+          lng: myLocation.lng
         });
 
-        // 1. Select-First: Se ainda não temos o ID em memória, buscar sessão existente no banco
-        if (!sessionId) {
-          const { data: existingSession, error: selectErr } = await supabase
-            .from('mototaxi_sessoes')
-            .select('id, is_online')
-            .eq('prestador_id', user.uid)
-            .maybeSingle();
+        const { data: existingSession, error: selectErr } = await supabase
+          .from('mototaxi_sessoes')
+          .select('id, is_online')
+          .eq('prestador_id', user.uid)
+          .maybeSingle();
 
-          if (!selectErr && existingSession) {
-            sessionId = existingSession.id;
-            activeSessionIdRef.current = existingSession.id;
-          }
-        }
-
-        if (sessionId) {
-          // 2. Reaproveitamento de sessão fantasma/ativa: Apenas UPDATE
+        if (existingSession) {
           const { data: updateData, error: updateErr } = await supabase
             .from('mototaxi_sessoes')
             .update({
@@ -280,13 +273,12 @@ const PrestadorMototaxiOnline = () => {
               lng: myLocation.lng,
               updated_at: new Date().toISOString()
             })
-            .eq('id', sessionId)
+            .eq('id', existingSession.id)
             .select();
 
-          console.log('[AUDIT PrestadorMototaxiOnline] Update mototaxi_sessoes:', { success: !updateErr, updateData, updateErr });
+          console.log('[AUDIT Prestador] Update mototaxi_sessoes:', { success: !updateErr, updateData, updateErr });
           if (updateErr) throw updateErr;
         } else {
-          // 3. Nenhuma sessão existente: Inserir nova sessão
           const { data: inserted, error: insertErr } = await supabase
             .from('mototaxi_sessoes')
             .insert({
@@ -299,35 +291,13 @@ const PrestadorMototaxiOnline = () => {
             .select('id')
             .single();
 
-          console.log('[AUDIT PrestadorMototaxiOnline] Insert mototaxi_sessoes:', { success: !insertErr, inserted, insertErr });
-
-          if (insertErr) {
-            // Tratamento inteligente de conflito (409 Duplicate Key / Unique Constraint)
-            console.warn("[AUDIT PrestadorMototaxiOnline] Conflito ao criar sessão de mototáxi (409). Recuperando sessão ativa...", insertErr);
-            const { data: recovered } = await supabase
-              .from('mototaxi_sessoes')
-              .select('id')
-              .eq('prestador_id', user.uid)
-              .maybeSingle();
-
-            if (recovered && !isCancelled) {
-              activeSessionIdRef.current = recovered.id;
-              await supabase
-                .from('mototaxi_sessoes')
-                .update({
-                  is_online: true,
-                  lat: myLocation.lat,
-                  lng: myLocation.lng,
-                  updated_at: new Date().toISOString()
-                })
-                .eq('id', recovered.id);
-            }
-          } else if (inserted && !isCancelled) {
-            activeSessionIdRef.current = inserted.id;
+          console.log('[AUDIT Prestador] Insert mototaxi_sessoes:', { success: !insertErr, inserted, insertErr });
+          if (insertErr && !isCancelled) {
+            console.warn("[AUDIT Prestador] Erro ao inserir sessão:", insertErr);
           }
         }
       } catch (err) {
-        console.error("[AUDIT PrestadorMototaxiOnline] Erro na sincronização de sessão mototáxi:", err);
+        console.error("[AUDIT Prestador] Erro na sincronização de sessão mototáxi:", err);
       }
     }
 
@@ -338,12 +308,11 @@ const PrestadorMototaxiOnline = () => {
     };
   }, [user.uid, myLocation]);
 
-  // Escutar chamados reais em tempo real e polling de contingência a cada 2.5s
+  // Escutar chamados reais em tempo real e polling de contingência a cada 2s
   useEffect(() => {
-    if (!user.uid) return;
-
     const fetchActiveChamado = async () => {
       try {
+        console.log('[AUDIT Prestador] Disparando fetchActiveChamado...', { uid: user?.uid, time: new Date().toISOString() });
         const { data, error } = await supabase
           .from('mototaxi_corridas')
           .select('*')
@@ -352,20 +321,23 @@ const PrestadorMototaxiOnline = () => {
           .order('created_at', { ascending: false })
           .limit(1);
 
-        console.log('[AUDIT PrestadorMototaxiOnline] Polling fetchActiveChamado:', {
-          prestador_uid: user.uid,
+        if (error) {
+          console.error('[AUDIT Prestador] Erro no polling:', error);
+          return;
+        }
+
+        console.log('[AUDIT Prestador] Resultado do polling:', {
           total_encontrados: data?.length || 0,
-          chamados: data,
-          error
+          chamados: data
         });
 
-        if (!error && data && data.length > 0) {
+        if (data && data.length > 0) {
           const c = data[0];
           const originObj = typeof c.origin === 'string' ? JSON.parse(c.origin) : c.origin;
           const destObj = typeof c.destination === 'string' ? JSON.parse(c.destination) : c.destination;
           setChamado((prev) => {
             if (prev && prev.id === c.id) return prev;
-            console.log('[AUDIT PrestadorMototaxiOnline] Novo chamado ativado no estado!', c);
+            console.log('[AUDIT Prestador] Novo chamado ativado no estado!', c);
             playChamadoSound();
             return {
               id: c.id,
@@ -379,12 +351,12 @@ const PrestadorMototaxiOnline = () => {
           });
         }
       } catch (err) {
-        console.error("[AUDIT PrestadorMototaxiOnline] Erro ao carregar chamados ativos:", err);
+        console.error("[AUDIT Prestador] Erro no polling:", err);
       }
     };
 
     fetchActiveChamado();
-    const pollInterval = setInterval(fetchActiveChamado, 2500);
+    const pollInterval = setInterval(fetchActiveChamado, 2000);
     return () => clearInterval(pollInterval);
   }, [user.uid]);
 
