@@ -344,20 +344,13 @@ const PrestadorMototaxiOnline = () => {
 
     const fetchActiveChamado = async () => {
       try {
-        let query = supabase
+        const { data, error } = await supabase
           .from('mototaxi_corridas')
           .select('*')
           .in('status', ['searching', 'pending', 'buscando', 'solicitado'])
+          .is('prestador_id', null)
           .order('created_at', { ascending: false })
-          .limit(5);
-
-        if (user.uid) {
-          query = query.or(`prestador_id.is.null,prestador_id.eq.${user.uid}`);
-        } else {
-          query = query.is('prestador_id', null);
-        }
-
-        const { data, error } = await query;
+          .limit(1);
 
         console.log('[AUDIT PrestadorMototaxiOnline] Polling fetchActiveChamado:', {
           prestador_uid: user.uid,
