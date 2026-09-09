@@ -29,19 +29,23 @@ interface LiveLogItem {
 
 interface RideRecord {
   id: string;
-  tomador_id: string;
-  prestador_id: string;
+  tomador_id?: string;
+  prestador_id?: string;
   status: string;
-  type: string;
-  origin: { lat: number; lng: number } | any;
-  destination: { lat: number; lng: number } | any;
-  distance_km: number;
-  duration_min: number;
+  type?: string;
+  estimated_price?: number;
+  final_price?: number;
+  payment_method?: string;
+  origin?: { lat: number; lng: number } | any;
+  destination?: { lat: number; lng: number } | any;
+  distance_km?: number;
+  duration_min?: number;
   real_distance_km?: number;
   real_duration_min?: number;
   average_speed_kmh?: number;
   risk_level?: "risk_low" | "risk_medium" | "risk_high" | string;
   antifraud_flags?: string[];
+  trajectory_polyline?: string;
   created_at: string;
 }
 
@@ -156,9 +160,20 @@ export default function AdminOperacoesPage() {
     const channelCorridas = supabase
       .channel("realtime-corridas-risk-log")
       .on("postgres_changes", { event: "*", schema: "public", table: "mototaxi_corridas" }, (payload: any) => {
-        if (payload.eventType === "UPDATE" && payload.new?.status === "completed") {
+        if (payload.eventType === "INSERT") {
+          setRecentRides(prev => [payload.new, ...prev.filter(r => r.id !== payload.new.id)].slice(0, 25));
+          const newLog: LiveLogItem = {
+            id: payload.new.id,
+            timestamp: new Date().toISOString(),
+            source: "pedidos",
+            event: `Nova Corrida #${payload.new.id.slice(0, 8).toUpperCase()} criada (${payload.new.status || "searching"}).`,
+            payload: payload.new
+          };
+          setLiveLogs(prev => [newLog, ...prev.slice(0, 19)]);
+          toast.show(`Nova corrida #${payload.new.id.slice(0, 8).toUpperCase()} criada!`);
+        } else if (payload.eventType === "UPDATE") {
           // Atualiza lista local
-          setRecentRides(prev => [payload.new, ...prev.filter(r => r.id !== payload.new.id)].slice(0, 9));
+          setRecentRides(prev => [payload.new, ...prev.filter(r => r.id !== payload.new.id)].slice(0, 25));
           
           // Incrementar contador de alertas se for alto/medio risco
           if (payload.new?.risk_level === "risk_high" || payload.new?.risk_level === "risk_medium") {
@@ -208,7 +223,7 @@ export default function AdminOperacoesPage() {
         supabase.from("coco_caminhoes").select("*", { count: "exact", head: true }),
         supabase.from("ambulante_sessions").select("*", { count: "exact", head: true }).eq("is_active", true),
         supabase.from("mototaxi_corridas").select("*", { count: "exact", head: true }).in("risk_level", ["risk_high", "risk_medium"]),
-        supabase.from("mototaxi_corridas").select("*").eq("status", "completed").order("created_at", { ascending: false }).limit(10)
+        supabase.from("mototaxi_corridas").select("*").order("created_at", { ascending: false }).limit(25)
       ]);
 
       setStats({
@@ -228,7 +243,7 @@ export default function AdminOperacoesPage() {
           id: "system_init",
           timestamp: new Date().toISOString(),
           source: "pedidos",
-          event: "Conexão Realtime estabelecida. Monitoramento de Ghost Ride ativo.",
+          event: "Conexão Realtime estabelecida. Monitoramento de Corridas e Ghost Ride ativo.",
           payload: { active_orders: pedCount, active_bookings: agCount, tracked_rides: ridesData?.length || 0 }
         }
       ]);
@@ -252,6 +267,29 @@ export default function AdminOperacoesPage() {
         return { color: "#E84040", bg: "rgba(232,64,64,0.1)", label: "Antifraude" };
       default:
         return { color: "#F5A623", bg: "rgba(245,166,35,0.1)", label: "Ambulantes" };
+    }
+  };
+
+  const getStatusPill = (status?: string) => {
+    switch (status) {
+      case "searching":
+      case "pending":
+      case "buscando":
+        return <Pill bg="rgba(43,110,232,0.12)" color="#2B6EE8">Buscando</Pill>;
+      case "accepted":
+        return <Pill bg="rgba(245,166,35,0.12)" color="#F5A623">Aceita</Pill>;
+      case "in_progress":
+      case "started":
+      case "em_andamento":
+        return <Pill bg="rgba(155,89,182,0.12)" color="#9B59B6">Em Rota</Pill>;
+      case "completed":
+      case "finalizada":
+        return <Pill bg="rgba(13,184,126,0.12)" color="#0DB87E">Concluída</Pill>;
+      case "cancelled":
+      case "cancelada":
+        return <Pill bg="rgba(232,64,64,0.12)" color="#E84040">Cancelada</Pill>;
+      default:
+        return <Pill bg="var(--admin-bg)" color="var(--admin-subtle)">{status || "Indefinido"}</Pill>;
     }
   };
 
@@ -371,14 +409,14 @@ export default function AdminOperacoesPage() {
             </div>
           ) : recentRides.length === 0 ? (
             <div style={{ padding: 40, textAlign: "center", color: "var(--admin-subtle)" }}>
-              Nenhuma corrida finalizada encontrada para auditoria locacional.
+              Nenhuma corrida encontrada para monitoramento locacional.
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead style={{ background: "var(--admin-bg)", borderBottom: "1px solid var(--admin-border)" }}>
                   <tr>
-                    {["Corrida / Horário", "Dist. Estimada", "Dist. Real", "Vel. Média", "Flags de Risco", "Nível Risco", "Ações"].map((h) => (
+                    {["Corrida / Horário", "Status", "Valor / Pagamento", "Dist. Estimada", "Dist. Real", "Vel. Média", "Flags de Risco", "Nível Risco", "Ações"].map((h) => (
                       <th key={h} style={{ textAlign: "left", padding: "12px 24px", fontSize: 11, fontWeight: 700, color: "var(--admin-subtle)", textTransform: "uppercase", letterSpacing: 1 }}>
                         {h}
                       </th>
@@ -390,6 +428,7 @@ export default function AdminOperacoesPage() {
                     const isHigh = r.risk_level === "risk_high";
                     const isMed = r.risk_level === "risk_medium";
                     const speed = r.average_speed_kmh ? Number(r.average_speed_kmh) : 0;
+                    const price = r.final_price || r.estimated_price;
                     
                     return (
                       <tr key={r.id} style={{ borderBottom: "1px solid var(--admin-border)", background: isHigh ? "rgba(232,64,64,0.02)" : "transparent" }}>
@@ -401,8 +440,19 @@ export default function AdminOperacoesPage() {
                             {new Date(r.created_at).toLocaleString("pt-BR")}
                           </span>
                         </td>
+                        <td style={{ padding: "16px 24px" }}>
+                          {getStatusPill(r.status)}
+                        </td>
+                        <td style={{ padding: "16px 24px" }}>
+                          <span style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--admin-text)" }}>
+                            {price ? `R$ ${Number(price).toFixed(2).replace(".", ",")}` : "R$ 0,00"}
+                          </span>
+                          <span style={{ display: "block", fontSize: 11, color: "var(--admin-muted)", textTransform: "uppercase" }}>
+                            {r.payment_method || "PIX"}
+                          </span>
+                        </td>
                         <td style={{ padding: "16px 24px", fontSize: 13, color: "var(--admin-subtle)" }}>
-                          {r.distance_km} km
+                          {r.distance_km !== undefined ? `${r.distance_km} km` : "N/A"}
                         </td>
                         <td style={{ padding: "16px 24px", fontSize: 13, color: "var(--admin-subtle)", fontWeight: 500 }}>
                           {r.real_distance_km !== undefined ? `${r.real_distance_km} km` : "N/A"}

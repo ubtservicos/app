@@ -581,10 +581,48 @@ const CompletedScreen = ({
   const mm = String(Math.floor(pixSeconds / 60)).padStart(2, "0");
   const ss = String(pixSeconds % 60).padStart(2, "0");
 
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardHolder, setCardHolder] = useState("");
+  const [cardExpiry, setCardExpiry] = useState("");
+  const [cardCvv, setCardCvv] = useState("");
+  const [cardCpf, setCardCpf] = useState("");
+
+  const formatCardNumber = (v: string) => {
+    const clean = v.replace(/\D/g, "").slice(0, 16);
+    return clean.replace(/(\d{4})(?=\d)/g, "$1 ");
+  };
+
+  const formatCardExpiry = (v: string) => {
+    const clean = v.replace(/\D/g, "").slice(0, 4);
+    if (clean.length >= 3) {
+      return `${clean.slice(0, 2)}/${clean.slice(2)}`;
+    }
+    return clean;
+  };
+
+  const applyTestCard = (preset: "master" | "visa") => {
+    if (preset === "master") {
+      setCardNumber("4242 4242 4242 4242");
+      setCardHolder("Felipe Santander");
+      setCardExpiry("11/28");
+      setCardCvv("123");
+      setCardCpf("123.456.789-00");
+    } else {
+      setCardNumber("5031 7557 3450 1234");
+      setCardHolder("Silvina Luz");
+      setCardExpiry("05/29");
+      setCardCvv("789");
+      setCardCpf("987.654.321-99");
+    }
+  };
+
   const handleConfirmPayment = async () => {
     setIsLoading(true);
     const finalAmount = feeCalc.totalAmount;
     try {
+      const cardClean = cardNumber.replace(/\s+/g, "");
+      const [expMonth, expYear] = cardExpiry.split("/");
+
       const { data, error } = await supabase.functions.invoke('payment-gateway', {
         body: {
           action: "create_payment_intent",
@@ -595,10 +633,17 @@ const CompletedScreen = ({
           provider_id: state.prestadorInfo?.id || "0a5edf64-7585-401f-b310-126529607da0",
           provider_name: state.prestadorInfo?.name || "Silvina Luz",
           payer_email: user.email || session?.user?.email || "felipe@exemplo.com",
-          payer_first_name: (user.name || "Felipe").split(" ")[0],
-          payer_last_name: (user.name || "Santander").split(" ").slice(1).join(" ") || "Santander",
+          payer_first_name: (cardHolder || user.name || "Felipe").split(" ")[0],
+          payer_last_name: (cardHolder || user.name || "Santander").split(" ").slice(1).join(" ") || "Santander",
           description: `Corrida UBT Mototáxi - ${formatBRL(finalAmount)} (Split 7 Vias)`,
-          payment_method_id: method
+          payment_method_id: method === "pix" ? "pix" : "credit_card",
+          card_data: method === "card" ? {
+            number: cardClean,
+            cardholder_name: cardHolder,
+            expiration_month: expMonth ? parseInt(expMonth, 10) : 12,
+            expiration_year: expYear ? (expYear.length === 2 ? 2000 + parseInt(expYear, 10) : parseInt(expYear, 10)) : 2028,
+            security_code: cardCvv,
+          } : undefined
         }
       });
       if (error) throw error;
@@ -714,8 +759,74 @@ const CompletedScreen = ({
           </p>
         </div>
       ) : (
-        <div className="mt-4 rounded-xl p-3" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)" }}>
-          <p className="font-sans text-[14px] text-white">Visa •••• 4242</p>
+        <div className="mt-4 rounded-2xl p-4 space-y-3" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.10)" }}>
+          <div className="flex items-center justify-between">
+            <span className="font-sans text-[12px] font-semibold text-white/70">Dados do Cartão de Crédito</span>
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => applyTestCard("master")}
+                className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#0DB87E]/20 text-[#0DB87E] border border-[#0DB87E]/30"
+              >
+                Teste MP 1
+              </button>
+              <button
+                type="button"
+                onClick={() => applyTestCard("visa")}
+                className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#2B6EE8]/20 text-[#2B6EE8] border border-[#2B6EE8]/30"
+              >
+                Teste MP 2
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="block font-sans text-[11px] text-white/60 mb-1">Número do Cartão</label>
+            <input
+              type="text"
+              value={cardNumber}
+              onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
+              placeholder="0000 0000 0000 0000"
+              className="w-full rounded-xl px-3 py-2.5 bg-black/30 border border-white/10 text-white font-mono text-[14px] outline-none focus:border-[#0DB87E]"
+              maxLength={19}
+            />
+          </div>
+
+          <div>
+            <label className="block font-sans text-[11px] text-white/60 mb-1">Nome no Cartão</label>
+            <input
+              type="text"
+              value={cardHolder}
+              onChange={(e) => setCardHolder(e.target.value.toUpperCase())}
+              placeholder="NOME COMO NO CARTÃO"
+              className="w-full rounded-xl px-3 py-2.5 bg-black/30 border border-white/10 text-white font-sans text-[13px] uppercase outline-none focus:border-[#0DB87E]"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <div>
+              <label className="block font-sans text-[11px] text-white/60 mb-1">Validade (MM/AA)</label>
+              <input
+                type="text"
+                value={cardExpiry}
+                onChange={(e) => setCardExpiry(formatCardExpiry(e.target.value))}
+                placeholder="MM/AA"
+                className="w-full rounded-xl px-3 py-2.5 bg-black/30 border border-white/10 text-white font-mono text-[13px] outline-none focus:border-[#0DB87E]"
+                maxLength={5}
+              />
+            </div>
+            <div>
+              <label className="block font-sans text-[11px] text-white/60 mb-1">CVV</label>
+              <input
+                type="password"
+                value={cardCvv}
+                onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                placeholder="123"
+                className="w-full rounded-xl px-3 py-2.5 bg-black/30 border border-white/10 text-white font-mono text-[13px] outline-none focus:border-[#0DB87E]"
+                maxLength={4}
+              />
+            </div>
+          </div>
         </div>
       )}
 

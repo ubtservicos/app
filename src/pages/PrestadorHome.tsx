@@ -5,6 +5,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/lib/supabase";
 import { getStatusRules, STATUS_THEMES } from "@/lib/statusRules";
 import GuidedOnboarding from "@/components/app/GuidedOnboarding";
+import MototaxiIncomingRideListener from "@/components/prestador/MototaxiIncomingRideListener";
 
 import { useTheme } from "@/hooks/useTheme";
 
@@ -367,6 +368,7 @@ const PrestadorHome = () => {
       className="min-h-[100svh] overflow-y-auto text-zinc-100"
       style={{ background: theme.bg, padding: "24px", paddingBottom: "100px" }}
     >
+      <MototaxiIncomingRideListener isOnline={activeServices.mototaxi} />
       {activeRule && (
         <div
           style={{

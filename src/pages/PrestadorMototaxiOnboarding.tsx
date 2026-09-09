@@ -2,15 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft, User as UserIcon, Hash, Upload, CheckCircle2, Bike, Package,
-  User, Info, Loader2,
+  User, Info, Loader2, AlertCircle, Clock, FileText, ExternalLink, ShieldCheck,
 } from "lucide-react";
 import FormFieldLight from "@/components/prestador/FormFieldLight";
 import PrimaryButtonLight from "@/components/prestador/PrimaryButtonLight";
 
 import { maskCPF } from "@/utils/masks";
 import { supabase } from "@/lib/supabase";
-
-const STEPS = ["Dados", "Docs", "Modo", "Revisão"];
 
 const maskPlate = (v: string) =>
   v
@@ -39,24 +37,35 @@ const TopBar = () => {
 const UploadArea = ({
   label,
   file,
+  existingUrl,
   onFile,
-}: { label: string; file: File | null; onFile: (f: File) => void }) => {
+}: {
+  label: string;
+  file: File | null;
+  existingUrl?: string | null;
+  onFile: (f: File) => void;
+}) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!file) { setPreview(null); return; }
+    if (!file) {
+      setPreview(existingUrl || null);
+      return;
+    }
     const url = URL.createObjectURL(file);
     setPreview(url);
     return () => URL.revokeObjectURL(url);
-  }, [file]);
+  }, [file, existingUrl]);
+
+  const hasImage = preview !== null;
 
   return (
     <div>
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,application/pdf"
         className="hidden"
         onChange={(e) => {
           const f = e.target.files?.[0];
@@ -66,25 +75,32 @@ const UploadArea = ({
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
-        className="w-full rounded-2xl flex flex-col items-center justify-center gap-2 transition-colors"
+        className="w-full rounded-2xl flex flex-col items-center justify-center gap-2 transition-all active:scale-98"
         style={{
-          border: `2px dashed ${file ? "#0DB87E" : "var(--prestador-border)"}`,
-          background: file ? "rgba(13,184,126,0.04)" : "var(--prestador-card)",
-          padding: "28px 16px",
+          border: `2px dashed ${hasImage ? "#0DB87E" : "var(--prestador-border)"}`,
+          background: hasImage ? "rgba(13,184,126,0.05)" : "var(--prestador-card)",
+          padding: "24px 16px",
         }}
       >
-        {file && preview ? (
-          <div className="flex items-center gap-3">
+        {hasImage ? (
+          <div className="flex items-center gap-3 w-full">
             <img
-              src={preview}
+              src={preview!}
               alt={label}
-              className="rounded-lg"
+              className="rounded-lg border border-[#0DB87E]/30 shrink-0"
               style={{ width: 60, height: 60, objectFit: "cover" }}
             />
-            <CheckCircle2 size={20} color="#0DB87E" />
-            <span className="font-sans text-[12px]" style={{ color: "#A1A1AA" }}>
-              {file.name.length > 22 ? file.name.slice(0, 22) + "…" : file.name}
-            </span>
+            <div className="text-left flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 size={16} color="#0DB87E" className="shrink-0" />
+                <span className="font-sans text-[13px] font-semibold text-white truncate block">
+                  {file ? file.name : `${label}`}
+                </span>
+              </div>
+              <span className="font-sans text-[11px] block mt-0.5" style={{ color: "#0DB87E" }}>
+                {file ? "Novo arquivo selecionado" : "Documento enviado (Clique para alterar)"}
+              </span>
+            </div>
           </div>
         ) : (
           <>
@@ -101,14 +117,11 @@ const UploadArea = ({
 
 const PrestadorMototaxiOnboarding = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("Pessoal");
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    const tabEl = document.getElementById(`tab-${activeTab}`);
-    if (tabEl) {
-      tabEl.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
-    }
-  }, [activeTab]);
+  const [activeTab, setActiveTab] = useState("Status KYC");
+  
+  // KYC details from DB
+  const [existingKyc, setExistingKyc] = useState<any | null>(null);
+  const [kycLoaded, setKycLoaded] = useState(false);
 
   // step 1 - Pessoal
   const [cpf, setCpf] = useState("");
@@ -128,34 +141,45 @@ const PrestadorMototaxiOnboarding = () => {
   const [motoFile, setMotoFile] = useState<File | null>(null);
 
   // step 5 - Modo
-  const [modalidade, setModalidade] = useState<Modalidade | null>(null);
+  const [modalidade, setModalidade] = useState<Modalidade | null>("carona_entrega");
 
   const canStepPessoal = cpf.length === 14 && sex;
-  const canStepDocsCondutor = true; // Bypassing photo requirement as per user request
+  const canStepDocsCondutor = true;
   const canStepDadosVeiculo = plate.length >= 7 && brandModel.trim().length >= 3;
-  const canStepDocsVeiculo = true; // Bypassing photo requirement
+  const canStepDocsVeiculo = true;
   const canStepModo = !!modalidade;
 
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user?.user_metadata) {
-        if (user.user_metadata.cpf) {
-          setCpf(maskCPF(user.user_metadata.cpf));
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return;
+      if (user.user_metadata) {
+        if (user.user_metadata.cpf) setCpf(maskCPF(user.user_metadata.cpf));
+        if (user.user_metadata.sexo) setSex(user.user_metadata.sexo);
+        if (user.user_metadata.placa_moto) setPlate(maskPlate(user.user_metadata.placa_moto));
+        if (user.user_metadata.modelo_moto) setBrandModel(user.user_metadata.modelo_moto);
+        if (user.user_metadata.modalidade_moto) setModalidade(user.user_metadata.modalidade_moto);
+      }
+
+      try {
+        const { data: motoRecord } = await supabase
+          .from("prestador_mototaxi")
+          .select("*")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (motoRecord) {
+          setExistingKyc(motoRecord);
+          if (motoRecord.cpf) setCpf(maskCPF(motoRecord.cpf));
+          if (motoRecord.plate) setPlate(maskPlate(motoRecord.plate));
+          if (motoRecord.gender) setSex(motoRecord.gender === "feminino" ? "F" : "M");
+          if (motoRecord.modalidade) setModalidade(motoRecord.modalidade);
         }
-        if (user.user_metadata.sexo) {
-          setSex(user.user_metadata.sexo);
-        }
-        if (user.user_metadata.placa_moto) {
-          setPlate(maskPlate(user.user_metadata.placa_moto));
-        }
-        if (user.user_metadata.modelo_moto) {
-          setBrandModel(user.user_metadata.modelo_moto);
-        }
-        if (user.user_metadata.modalidade_moto) {
-          setModalidade(user.user_metadata.modalidade_moto);
-        }
+      } catch (err) {
+        console.warn("Erro ao buscar prestador_mototaxi:", err);
+      } finally {
+        setKycLoaded(true);
       }
     });
   }, []);
@@ -187,7 +211,7 @@ const PrestadorMototaxiOnboarding = () => {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user) {
-        // 1. Upload files to Storage if present
+        // 1. Upload files to Storage if new ones provided
         const [
           cnhFrenteUrl,
           cnhVersoUrl,
@@ -195,14 +219,14 @@ const PrestadorMototaxiOnboarding = () => {
           crlvUrl,
           motoPhotoUrl,
         ] = await Promise.all([
-          cnhFront ? uploadDoc(cnhFront, "cnh_frente", user.id) : Promise.resolve(null),
-          cnhBack ? uploadDoc(cnhBack, "cnh_verso", user.id) : Promise.resolve(null),
-          selfie ? uploadDoc(selfie, "selfie", user.id) : Promise.resolve(null),
-          crlvFile ? uploadDoc(crlvFile, "crlv", user.id) : Promise.resolve(null),
-          motoFile ? uploadDoc(motoFile, "foto_moto", user.id) : Promise.resolve(null),
+          cnhFront ? uploadDoc(cnhFront, "cnh_frente", user.id) : Promise.resolve(existingKyc?.cnh_frente_url || null),
+          cnhBack ? uploadDoc(cnhBack, "cnh_verso", user.id) : Promise.resolve(existingKyc?.cnh_verso_url || null),
+          selfie ? uploadDoc(selfie, "selfie", user.id) : Promise.resolve(existingKyc?.selfie_url || null),
+          crlvFile ? uploadDoc(crlvFile, "crlv", user.id) : Promise.resolve(existingKyc?.crlv_url || null),
+          motoFile ? uploadDoc(motoFile, "foto_moto", user.id) : Promise.resolve(existingKyc?.moto_photo_url || null),
         ]);
 
-        // 2. Update Auth metadata (only basic profile fields)
+        // 2. Update Auth metadata
         await supabase.auth.updateUser({
           data: {
             cpf: cpf,
@@ -221,7 +245,7 @@ const PrestadorMototaxiOnboarding = () => {
           plate: plate,
           gender: genderMapped,
           modalidade: modalidade,
-          kyc_status: "pending",
+          kyc_status: existingKyc?.kyc_status === "approved" ? "approved" : "pending",
           is_online: false,
           cnh_frente_url: cnhFrenteUrl,
           cnh_verso_url: cnhVersoUrl,
@@ -237,10 +261,12 @@ const PrestadorMototaxiOnboarding = () => {
           throw upsertErr;
         }
 
-        // 4. Mark under_review in usuarios
-        await supabase.from("usuarios").update({
-          under_review: true
-        }).eq("id", user.id);
+        // 4. Mark under_review in usuarios if pending
+        if (existingKyc?.kyc_status !== "approved") {
+          await supabase.from("usuarios").update({
+            under_review: true
+          }).eq("id", user.id);
+        }
       }
 
       setLoading(false);
@@ -252,7 +278,45 @@ const PrestadorMototaxiOnboarding = () => {
     }
   };
 
-  const TABS = ["Pessoal", "Docs Condutor", "Dados Veículo", "Docs Veículo", "Modo"];
+  const TABS = ["Status KYC", "Pessoal", "Docs Condutor", "Dados Veículo", "Docs Veículo", "Modo"];
+
+  const getDocStatusBadge = (url?: string | null) => {
+    const overall = existingKyc?.kyc_status;
+    if (!url) {
+      return (
+        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-white/10 text-white/60">
+          Não enviado
+        </span>
+      );
+    }
+    if (overall === "approved") {
+      return (
+        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#0DB87E]/20 text-[#0DB87E] border border-[#0DB87E]/30">
+          Aprovado ✓
+        </span>
+      );
+    }
+    if (overall === "rejected") {
+      return (
+        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#E84040]/20 text-[#E84040] border border-[#E84040]/30">
+          Rejeitado ✕
+        </span>
+      );
+    }
+    return (
+      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#F5A623]/20 text-[#F5A623] border border-[#F5A623]/30">
+        Em Análise ⏳
+      </span>
+    );
+  };
+
+  const docsList = [
+    { title: "CNH — Frente", url: existingKyc?.cnh_frente_url, tabTarget: "Docs Condutor" },
+    { title: "CNH — Verso", url: existingKyc?.cnh_verso_url, tabTarget: "Docs Condutor" },
+    { title: "Selfie com Documento", url: existingKyc?.selfie_url, tabTarget: "Docs Condutor" },
+    { title: "CRLV da Moto", url: existingKyc?.crlv_url, tabTarget: "Docs Veículo" },
+    { title: "Foto da Moto (Placa)", url: existingKyc?.moto_photo_url, tabTarget: "Docs Veículo" },
+  ];
 
   return (
     <div
@@ -262,20 +326,22 @@ const PrestadorMototaxiOnboarding = () => {
       <TopBar />
 
       <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 16, marginBottom: 16, scrollbarWidth: "none" }}>
-        {TABS.map(t => (
+        {TABS.map((t) => (
           <button
-            key={t} id={`tab-${t}`} onClick={() => setActiveTab(t)}
+            key={t}
+            id={`tab-${t}`}
+            onClick={() => setActiveTab(t)}
             style={{
-              padding: "10px 20px",
+              padding: "10px 18px",
               borderRadius: 999,
               background: activeTab === t ? "#0DB87E" : "var(--prestador-card)",
               color: activeTab === t ? "#09090B" : "#A1A1AA",
               fontFamily: "DM Sans",
               fontWeight: 600,
-              fontSize: 14,
+              fontSize: 13,
               border: "none",
               cursor: "pointer",
-              whiteSpace: "nowrap"
+              whiteSpace: "nowrap",
             }}
           >
             {t}
@@ -283,11 +349,108 @@ const PrestadorMototaxiOnboarding = () => {
         ))}
       </div>
 
+      <div className="mt-4">
+        {activeTab === "Status KYC" && (
+          <div className="space-y-4">
+            {/* Status Card Geral */}
+            <div
+              className="rounded-2xl p-5"
+              style={{
+                background: "var(--prestador-card)",
+                border: "1px solid var(--prestador-border)",
+              }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <span className="font-sans text-[12px] font-semibold text-white/60 uppercase tracking-wider">
+                  Status Geral do Cadastro
+                </span>
+                {existingKyc?.kyc_status === "approved" ? (
+                  <span className="px-3 py-1 rounded-full text-[12px] font-bold bg-[#0DB87E]/20 text-[#0DB87E] border border-[#0DB87E]/40 flex items-center gap-1.5">
+                    <ShieldCheck size={14} /> Cadastro Aprovado
+                  </span>
+                ) : existingKyc?.kyc_status === "rejected" ? (
+                  <span className="px-3 py-1 rounded-full text-[12px] font-bold bg-[#E84040]/20 text-[#E84040] border border-[#E84040]/40 flex items-center gap-1.5">
+                    <AlertCircle size={14} /> Documentação Rejeitada
+                  </span>
+                ) : (
+                  <span className="px-3 py-1 rounded-full text-[12px] font-bold bg-[#F5A623]/20 text-[#F5A623] border border-[#F5A623]/40 flex items-center gap-1.5">
+                    <Clock size={14} /> Em Análise pela Equipe
+                  </span>
+                )}
+              </div>
 
-      <div className="mt-7">
+              <h2 className="font-display text-[18px] font-bold text-white">
+                Documentos e Regras de Mototáxi
+              </h2>
+              <p className="font-sans text-[13px] text-white/70 mt-1">
+                {existingKyc?.kyc_status === "approved"
+                  ? "Sua documentação está regularizada e você está habilitado para receber chamados."
+                  : "Seus documentos estão em processo de validação pela equipe de operações da UBT."}
+              </p>
+            </div>
+
+            {/* Lista Detalhada de Documentos */}
+            <h3 className="font-display text-[15px] font-bold text-white mt-6 mb-3">
+              Documentos Enviados
+            </h3>
+            <div className="space-y-2.5">
+              {docsList.map((doc, idx) => (
+                <div
+                  key={idx}
+                  className="rounded-xl p-3.5 flex items-center justify-between gap-3"
+                  style={{
+                    background: "var(--prestador-card)",
+                    border: "1px solid var(--prestador-border)",
+                  }}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    {doc.url ? (
+                      <img
+                        src={doc.url}
+                        alt={doc.title}
+                        className="w-12 h-12 rounded-lg object-cover border border-[#0DB87E]/30 shrink-0"
+                      />
+                    ) : (
+                      <div
+                        className="w-12 h-12 rounded-lg flex items-center justify-center shrink-0"
+                        style={{ background: "rgba(255,255,255,0.05)" }}
+                      >
+                        <FileText size={20} color="#9399AD" />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="font-sans text-[14px] font-semibold text-white truncate">
+                        {doc.title}
+                      </p>
+                      <div className="mt-1 flex items-center gap-2">
+                        {getDocStatusBadge(doc.url)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab(doc.tabTarget)}
+                    className="px-3 py-1.5 rounded-lg font-sans text-[12px] font-semibold text-white/80 shrink-0 transition-colors"
+                    style={{ background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)" }}
+                  >
+                    {doc.url ? "Alterar" : "Enviar"}
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6">
+              <PrimaryButtonLight onClick={() => setActiveTab("Pessoal")}>
+                Editar Dados e Documentos
+              </PrimaryButtonLight>
+            </div>
+          </div>
+        )}
+
         {activeTab === "Pessoal" && (
           <div className="space-y-4">
-            <h2 className="font-display text-[18px] font-bold" style={{ color: "#0B1B3E" }}>
+            <h2 className="font-display text-[18px] font-bold text-white">
               Dados pessoais
             </h2>
             <FormFieldLight
@@ -333,9 +496,9 @@ const PrestadorMototaxiOnboarding = () => {
             <h2 className="font-display text-[18px] font-bold text-white">
               Documentos do Condutor
             </h2>
-            <UploadArea label="CNH — Frente" file={cnhFront} onFile={setCnhFront} />
-            <UploadArea label="CNH — Verso" file={cnhBack} onFile={setCnhBack} />
-            <UploadArea label="Selfie segurando a CNH" file={selfie} onFile={setSelfie} />
+            <UploadArea label="CNH — Frente" file={cnhFront} existingUrl={existingKyc?.cnh_frente_url} onFile={setCnhFront} />
+            <UploadArea label="CNH — Verso" file={cnhBack} existingUrl={existingKyc?.cnh_verso_url} onFile={setCnhBack} />
+            <UploadArea label="Selfie segurando a CNH" file={selfie} existingUrl={existingKyc?.selfie_url} onFile={setSelfie} />
           </div>
         )}
 
@@ -367,8 +530,8 @@ const PrestadorMototaxiOnboarding = () => {
             <h2 className="font-display text-[18px] font-bold text-white">
               Documentos do Veículo
             </h2>
-            <UploadArea label="CRLV (Certificado do Veículo)" file={crlvFile} onFile={setCrlvFile} />
-            <UploadArea label="Foto da Moto (com a Placa visível)" file={motoFile} onFile={setMotoFile} />
+            <UploadArea label="CRLV (Certificado do Veículo)" file={crlvFile} existingUrl={existingKyc?.crlv_url} onFile={setCrlvFile} />
+            <UploadArea label="Foto da Moto (com a Placa visível)" file={motoFile} existingUrl={existingKyc?.moto_photo_url} onFile={setMotoFile} />
           </div>
         )}
 
@@ -421,126 +584,122 @@ const PrestadorMototaxiOnboarding = () => {
           </div>
         )}
 
-        <div style={{ position: "fixed", bottom: 64, left: 0, right: 0, padding: 24, background: "var(--prestador-bg)", borderTop: "1px solid var(--prestador-border)", zIndex: 10 }}>
-          {activeTab === "Pessoal" ? (
-            <PrimaryButtonLight
-              onClick={() => setActiveTab("Docs Condutor")}
-              disabled={!canStepPessoal}
-            >
-              Avançar para Documentos
-            </PrimaryButtonLight>
-          ) : activeTab === "Docs Condutor" ? (
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setActiveTab("Pessoal")}
-                className="flex-1 font-sans font-bold text-[14px]"
-                style={{
-                  border: "1px solid var(--prestador-border)",
-                  borderRadius: 12,
-                  color: "#A1A1AA",
-                  background: "var(--prestador-card)",
-                  padding: "14px 0",
-                }}
-              >
-                Voltar
-              </button>
-              <div className="flex-[2]">
-                <PrimaryButtonLight
-                  onClick={() => setActiveTab("Dados Veículo")}
-                  disabled={!canStepDocsCondutor}
-                >
-                  Avançar para Veículo
-                </PrimaryButtonLight>
-              </div>
-            </div>
-          ) : activeTab === "Dados Veículo" ? (
-            <div className="flex gap-2">
-              <button
-                type="button"
+        {activeTab !== "Status KYC" && (
+          <div style={{ position: "fixed", bottom: 64, left: 0, right: 0, padding: 24, background: "var(--prestador-bg)", borderTop: "1px solid var(--prestador-border)", zIndex: 10 }}>
+            {activeTab === "Pessoal" ? (
+              <PrimaryButtonLight
                 onClick={() => setActiveTab("Docs Condutor")}
-                className="flex-1 font-sans font-bold text-[14px]"
-                style={{
-                  border: "1px solid var(--prestador-border)",
-                  borderRadius: 12,
-                  color: "#A1A1AA",
-                  background: "var(--prestador-card)",
-                  padding: "14px 0",
-                }}
+                disabled={!canStepPessoal}
               >
-                Voltar
-              </button>
-              <div className="flex-[2]">
-                <PrimaryButtonLight
+                Avançar para Documentos
+              </PrimaryButtonLight>
+            ) : activeTab === "Docs Condutor" ? (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("Pessoal")}
+                  className="flex-1 font-sans font-bold text-[14px]"
+                  style={{
+                    border: "1px solid var(--prestador-border)",
+                    borderRadius: 12,
+                    color: "#A1A1AA",
+                    background: "var(--prestador-card)",
+                    padding: "14px 0",
+                  }}
+                >
+                  Voltar
+                </button>
+                <div className="flex-[2]">
+                  <PrimaryButtonLight
+                    onClick={() => setActiveTab("Dados Veículo")}
+                    disabled={!canStepDocsCondutor}
+                  >
+                    Avançar para Veículo
+                  </PrimaryButtonLight>
+                </div>
+              </div>
+            ) : activeTab === "Dados Veículo" ? (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("Docs Condutor")}
+                  className="flex-1 font-sans font-bold text-[14px]"
+                  style={{
+                    border: "1px solid var(--prestador-border)",
+                    borderRadius: 12,
+                    color: "#A1A1AA",
+                    background: "var(--prestador-card)",
+                    padding: "14px 0",
+                  }}
+                >
+                  Voltar
+                </button>
+                <div className="flex-[2]">
+                  <PrimaryButtonLight
+                    onClick={() => setActiveTab("Docs Veículo")}
+                    disabled={!canStepDadosVeiculo}
+                  >
+                    Avançar para Fotos Veículo
+                  </PrimaryButtonLight>
+                </div>
+              </div>
+            ) : activeTab === "Docs Veículo" ? (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("Dados Veículo")}
+                  className="flex-1 font-sans font-bold text-[14px]"
+                  style={{
+                    border: "1px solid var(--prestador-border)",
+                    borderRadius: 12,
+                    color: "#A1A1AA",
+                    background: "var(--prestador-card)",
+                    padding: "14px 0",
+                  }}
+                >
+                  Voltar
+                </button>
+                <div className="flex-[2]">
+                  <PrimaryButtonLight
+                    onClick={() => setActiveTab("Modo")}
+                    disabled={!canStepDocsVeiculo}
+                  >
+                    Avançar para Modo
+                  </PrimaryButtonLight>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <button
+                  type="button"
                   onClick={() => setActiveTab("Docs Veículo")}
-                  disabled={!canStepDadosVeiculo}
+                  className="flex-1 font-sans font-bold text-[14px]"
+                  style={{
+                    border: "1px solid var(--prestador-border)",
+                    borderRadius: 12,
+                    color: "#A1A1AA",
+                    background: "var(--prestador-card)",
+                    padding: "14px 0",
+                  }}
                 >
-                  Avançar para Fotos Veículo
-                </PrimaryButtonLight>
+                  Voltar
+                </button>
+                <div className="flex-[2]">
+                  <PrimaryButtonLight
+                    onClick={submit}
+                    loading={loading}
+                    disabled={!canStepPessoal || !canStepDadosVeiculo || !canStepModo}
+                  >
+                    Salvar Configurações
+                  </PrimaryButtonLight>
+                </div>
               </div>
-            </div>
-          ) : activeTab === "Docs Veículo" ? (
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setActiveTab("Dados Veículo")}
-                className="flex-1 font-sans font-bold text-[14px]"
-                style={{
-                  border: "1px solid var(--prestador-border)",
-                  borderRadius: 12,
-                  color: "#A1A1AA",
-                  background: "var(--prestador-card)",
-                  padding: "14px 0",
-                }}
-              >
-                Voltar
-              </button>
-              <div className="flex-[2]">
-                <PrimaryButtonLight
-                  onClick={() => setActiveTab("Modo")}
-                  disabled={!canStepDocsVeiculo}
-                >
-                  Avançar para Modo
-                </PrimaryButtonLight>
-              </div>
-            </div>
-          ) : (
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setActiveTab("Docs Veículo")}
-                className="flex-1 font-sans font-bold text-[14px]"
-                style={{
-                  border: "1px solid var(--prestador-border)",
-                  borderRadius: 12,
-                  color: "#A1A1AA",
-                  background: "var(--prestador-card)",
-                  padding: "14px 0",
-                }}
-              >
-                Voltar
-              </button>
-              <div className="flex-[2]">
-                <PrimaryButtonLight
-                  onClick={submit}
-                  loading={loading}
-                  disabled={!canStepPessoal || !canStepDadosVeiculo || !canStepModo}
-                >
-                  Salvar Configurações
-                </PrimaryButtonLight>
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
-};
-
-const STEPS_LABELS: Record<Modalidade, string> = {
-  carona_entrega: "Carona e Entrega",
-  so_entrega: "Só Entrega",
-  so_carona: "Só Carona",
 };
 
 export default PrestadorMototaxiOnboarding;
