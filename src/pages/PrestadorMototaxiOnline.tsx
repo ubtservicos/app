@@ -98,16 +98,18 @@ const ChamadoModal = ({
 
   return (
     <div
-      className="fixed inset-0 flex items-end justify-center"
-      style={{ background: "rgba(0,0,0,0.70)", backdropFilter: "blur(6px)", zIndex: 1050 }}
+      className="fixed inset-0 flex items-end justify-center z-[1100]"
+      style={{ background: "rgba(0,0,0,0.70)", backdropFilter: "blur(6px)", zIndex: 1100 }}
     >
       <div
-        className="w-full max-w-md"
+        className="w-full max-w-md pb-28"
         style={{
           background: "var(--prestador-card)",
           borderTop: "2px solid var(--prestador-border)",
           borderRadius: "24px 24px 0 0",
-          padding: 24,
+          padding: "24px 24px 100px 24px",
+          maxHeight: "90vh",
+          overflowY: "auto",
           animation: "ubt-slide-up 300ms ease-out",
         }}
       >
@@ -312,12 +314,15 @@ const PrestadorMototaxiOnline = () => {
   useEffect(() => {
     const fetchActiveChamado = async () => {
       try {
-        console.log('[AUDIT Prestador] Disparando fetchActiveChamado...', { uid: user?.uid, time: new Date().toISOString() });
+        const ninetySecsAgo = new Date(Date.now() - 90000).toISOString();
+        console.log('[AUDIT Prestador] Disparando fetchActiveChamado...', { uid: user?.uid, time: new Date().toISOString(), created_after: ninetySecsAgo });
+
         const { data, error } = await supabase
           .from('mototaxi_corridas')
           .select('*')
           .in('status', ['searching', 'pending', 'buscando', 'solicitado'])
           .is('prestador_id', null)
+          .gt('created_at', ninetySecsAgo)
           .order('created_at', { ascending: false })
           .limit(1);
 
@@ -458,32 +463,41 @@ const PrestadorMototaxiOnline = () => {
 
   const accept = async () => {
     if (!chamado) return;
+    let currentUid = user.uid;
+    if (!currentUid) {
+      const { data: authData } = await supabase.auth.getUser();
+      currentUid = authData?.user?.id || "";
+    }
+
+    console.log('[AUDIT Prestador] Tentando aceitar corrida ID:', chamado.id, 'prestador_uid:', currentUid);
+
     try {
       const { data, error } = await supabase
         .from('mototaxi_corridas')
         .update({
           status: 'accepted',
-          prestador_id: user.uid,
+          prestador_id: currentUid,
           accepted_at: new Date().toISOString()
         })
         .eq('id', chamado.id)
-        .in('status', ['searching', 'pending', 'buscando', 'solicitado'])
-        .is('prestador_id', null)
-        .select('id')
+        .select()
         .single();
 
+      console.log('[AUDIT Prestador] Resposta do UPDATE de aceite:', { success: !error, data, error });
+
       if (error || !data) {
-        alert('Esta corrida já foi aceita por outro motorista.');
+        console.error('[AUDIT Prestador] Falha ao aceitar corrida:', error);
+        alert(`Erro ao aceitar corrida: ${error?.message || 'Outro motorista pode ter aceitado.'}`);
         setChamado(null);
         return;
       }
 
-      sessionStorage.setItem("ubt_active_ride", JSON.stringify(chamado));
+      sessionStorage.setItem("ubt_active_ride", JSON.stringify({ ...chamado, prestador_id: currentUid }));
       setChamado(null);
       navigate("/app/prestador/mototaxi/active");
     } catch (e) {
-      console.error('Erro ao aceitar corrida:', e);
-      alert('Erro ao aceitar corrida! Outro motorista pode ter aceitado.');
+      console.error('[AUDIT Prestador] Exceção ao aceitar corrida:', e);
+      alert('Erro ao aceitar corrida! Tente novamente.');
       setChamado(null);
     }
   };
