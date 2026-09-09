@@ -19,6 +19,8 @@ import {
 } from "lucide-react";
 import MototaxiMap from "@/components/mototaxi/MototaxiMap";
 import SplitBreakdown from "@/components/mototaxi/SplitBreakdown";
+import QuickStatusMessages from "@/components/mototaxi/QuickStatusMessages";
+import { fetchGatewayFeeSettings, calculatePaymentWithFee, type GatewayFeeSettings, DEFAULT_FEE_SETTINGS } from "@/services/FinancialFeeService";
 import { calcPrice, formatBRL } from "@/utils/ride";
 import { useRide, type RideType } from "@/contexts/RideContext";
 import { searchAddressesWithSessionToken, getPlaceDetails, createAutocompleteSessionToken, type AutocompleteSuggestion } from "@/lib/geoService";
@@ -408,7 +410,7 @@ const AcceptedSheet = ({
   onArrive,
   onSendMessage,
 }: {
-  prestador: { name: string; plate: string; rating: number };
+  prestador: { name?: string; plate?: string; rating?: number };
   durationMin: number;
   acceptedAt: number;
   onCancel: () => void;
@@ -420,13 +422,15 @@ const AcceptedSheet = ({
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
-  const elapsed = Math.floor((now - acceptedAt) / 1000);
+  const safeAcceptedAt = acceptedAt || Date.now();
+  const elapsed = Math.floor((now - safeAcceptedAt) / 1000);
   const canCancelFree = elapsed < 60;
   const remaining = Math.max(0, 60 - elapsed);
 
-  // Auto-arrive removed - waiting for driver updates via Supabase
-
-  const initials = prestador.name.split(" ").map((p) => p[0]).slice(0, 2).join("");
+  const prestadorName = prestador?.name || "Prestador";
+  const initials = prestadorName.split(" ").filter(Boolean).map((p) => p[0]).slice(0, 2).join("").toUpperCase() || "UB";
+  const ratingVal = typeof prestador?.rating === "number" ? prestador.rating : 5.0;
+  const plateVal = prestador?.plate || "UBT";
 
   return (
     <Sheet>
@@ -438,13 +442,13 @@ const AcceptedSheet = ({
           <span className="font-display font-bold text-white text-[18px]">{initials}</span>
         </div>
         <div className="flex-1">
-          <p className="font-display text-[17px] font-bold text-white">{prestador.name}</p>
+          <p className="font-display text-[17px] font-bold text-white">{prestadorName}</p>
           <div className="flex items-center gap-1 mt-0.5">
             {[1,2,3,4,5].map((i) => (
-              <Star key={i} size={12} fill={i <= Math.round(prestador.rating) ? "#F5A623" : "transparent"} style={{ color: "#F5A623" }} />
+              <Star key={i} size={12} fill={i <= Math.round(ratingVal) ? "#F5A623" : "transparent"} style={{ color: "#F5A623" }} />
             ))}
             <span className="ml-1 font-sans text-[12px]" style={{ color: "rgba(255,255,255,0.6)" }}>
-              {prestador.rating.toFixed(1)}
+              {ratingVal.toFixed(1)}
             </span>
           </div>
         </div>
@@ -452,36 +456,21 @@ const AcceptedSheet = ({
           className="px-2.5 py-1 rounded-full font-sans text-[12px] font-semibold text-white"
           style={{ background: "rgba(255,255,255,0.08)" }}
         >
-          {prestador.plate}
+          {plateVal}
         </span>
       </div>
 
       <div className="mt-4 flex items-center gap-2">
         <Clock size={16} style={{ color: "#0DB87E" }} />
         <span className="font-sans text-[15px] font-medium text-white">
-          Chegando em ~{durationMin} min
+          Chegando em ~{durationMin || 5} min
         </span>
       </div>
       <div className="mt-2 h-[3px] rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
-        <div className="h-full" style={{ background: "#0DB87E", width: `${Math.min(100, (elapsed / (durationMin * 60)) * 100)}%`, transition: "width 1s linear" }} />
+        <div className="h-full" style={{ background: "#0DB87E", width: `${Math.min(100, (elapsed / ((durationMin || 5) * 60)) * 100)}%`, transition: "width 1s linear" }} />
       </div>
 
-      {/* Chat chips */}
-      <p className="mt-4 font-sans text-[10px] font-semibold uppercase" style={{ color: "rgba(255,255,255,0.4)", letterSpacing: 1.2 }}>
-        Mensagem rápida
-      </p>
-      <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-        {["Já estou aqui 📍", "Aguarde um momento ⏱", "Onde exatamente? 🗺"].map((m) => (
-          <button
-            key={m}
-            onClick={() => onSendMessage(m)}
-            className="shrink-0 px-3 h-9 rounded-full font-sans text-[13px] text-white"
-            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)" }}
-          >
-            {m}
-          </button>
-        ))}
-      </div>
+      <QuickStatusMessages role="tomador" onSendMessage={onSendMessage} className="mt-4" />
 
       {canCancelFree && (
         <button
@@ -508,8 +497,6 @@ const InProgressSheet = ({
 }) => {
   const [showEmergency, setShowEmergency] = useState(false);
 
-  // Auto-complete removed - waiting for driver to complete trip via Supabase
-
   return (
     <Sheet>
       <div className="flex items-center justify-between">
@@ -520,25 +507,11 @@ const InProgressSheet = ({
           Em andamento
         </span>
         <span className="font-sans text-[13px] text-white">
-          Chegando em ~{durationMin} min
+          Chegando em ~{durationMin || 5} min
         </span>
       </div>
 
-      <p className="mt-4 font-sans text-[10px] font-semibold uppercase" style={{ color: "rgba(255,255,255,0.4)", letterSpacing: 1.2 }}>
-        Mensagem rápida
-      </p>
-      <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
-        {["Ok, pode ir 👍", "Preciso parar 🛑", "Estou no destino ✅"].map((m) => (
-          <button
-            key={m}
-            onClick={() => onSendMessage(m)}
-            className="shrink-0 px-3 h-9 rounded-full font-sans text-[13px] text-white"
-            style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)" }}
-          >
-            {m}
-          </button>
-        ))}
-      </div>
+      <QuickStatusMessages role="tomador" onSendMessage={onSendMessage} className="mt-4" />
 
       <button
         onClick={() => setShowEmergency(true)}
@@ -591,6 +564,14 @@ const CompletedScreen = ({
   const [pixSeconds, setPixSeconds] = useState(300);
   const [isLoading, setIsLoading] = useState(false);
   const [qrCodeBase64, setQrCodeBase64] = useState<string>("");
+  const [feeSettings, setFeeSettings] = useState<GatewayFeeSettings>(DEFAULT_FEE_SETTINGS);
+
+  useEffect(() => {
+    fetchGatewayFeeSettings().then(setFeeSettings);
+  }, []);
+
+  const rawBase = price > 0 ? price : 10.00;
+  const feeCalc = calculatePaymentWithFee(rawBase, method, feeSettings);
 
   useEffect(() => {
     if (method !== "pix") return;
@@ -602,20 +583,21 @@ const CompletedScreen = ({
 
   const handleConfirmPayment = async () => {
     setIsLoading(true);
-    const finalAmount = price > 0 ? price : 10.00;
+    const finalAmount = feeCalc.totalAmount;
     try {
       const { data, error } = await supabase.functions.invoke('payment-gateway', {
         body: {
           action: "create_payment_intent",
           service_type: "mototaxi",
           service_id: state.rideId || "00000000-0000-0000-0000-000000000001",
+          external_reference: state.rideId || undefined,
           transaction_amount: finalAmount,
           provider_id: state.prestadorInfo?.id || "0a5edf64-7585-401f-b310-126529607da0",
           provider_name: state.prestadorInfo?.name || "Silvina Luz",
           payer_email: user.email || session?.user?.email || "felipe@exemplo.com",
           payer_first_name: (user.name || "Felipe").split(" ")[0],
           payer_last_name: (user.name || "Santander").split(" ").slice(1).join(" ") || "Santander",
-          description: `Corrida UBT Mototáxi - R$ ${finalAmount.toFixed(2)} (Sandbox Split 7 Vias)`,
+          description: `Corrida UBT Mototáxi - ${formatBRL(finalAmount)} (Split 7 Vias)`,
           payment_method_id: method
         }
       });
@@ -659,13 +641,30 @@ const CompletedScreen = ({
         <div className="my-3 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
         <div className="flex justify-between items-center">
           <span className="font-display text-[14px]" style={{ color: "rgba(255,255,255,0.7)" }}>
-            Total
+            Tarifa Base
           </span>
-          <span className="font-display text-[20px] font-bold" style={{ color: "#0DB87E" }}>
-            {formatBRL(price)}
+          <span className="font-display text-[15px] font-semibold text-white">
+            {formatBRL(feeCalc.basePrice)}
           </span>
         </div>
-        <SplitBreakdown total={price} />
+        <div className="flex justify-between items-center mt-1.5">
+          <span className="font-sans text-[13px]" style={{ color: "rgba(255,255,255,0.55)" }}>
+            Taxa {method === 'pix' ? 'PIX' : 'Cartão'} ({feeCalc.feePct > 0 ? `${feeCalc.feePct.toFixed(2)}%` : 'Isenta'})
+          </span>
+          <span className="font-sans text-[13px] font-medium" style={{ color: feeCalc.feeAmount > 0 ? "#F5A623" : "#0DB87E" }}>
+            {feeCalc.feeAmount > 0 ? `+ ${formatBRL(feeCalc.feeAmount)}` : "Grátis"}
+          </span>
+        </div>
+        <div className="my-3 h-px" style={{ background: "rgba(255,255,255,0.08)" }} />
+        <div className="flex justify-between items-center">
+          <span className="font-display text-[14px] font-bold" style={{ color: "rgba(255,255,255,0.9)" }}>
+            Total a Pagar
+          </span>
+          <span className="font-display text-[20px] font-bold" style={{ color: "#0DB87E" }}>
+            {formatBRL(feeCalc.totalAmount)}
+          </span>
+        </div>
+        <SplitBreakdown total={feeCalc.basePrice} />
       </div>
 
       <h2 className="mt-6 font-display text-[16px] font-bold">Forma de pagamento</h2>
@@ -1316,8 +1315,20 @@ const MototaxiTomadorPage = () => {
 
   const sendMessage = (text: string) => {
     setState({
-      messages: [...state.messages, { text, from: "tomador", ts: Date.now() }],
+      messages: [...(state.messages || []), { text, from: "tomador", ts: Date.now() }],
     });
+    if (state.rideId) {
+      try {
+        const channel = supabase.channel(`ride_${state.rideId}`);
+        channel.send({
+          type: 'broadcast',
+          event: 'quick_message',
+          payload: { text, from: 'tomador', ts: Date.now() }
+        });
+      } catch (e) {
+        console.warn("Falha ao transmitir mensagem do tomador:", e);
+      }
+    }
   };
 
   const handleReset = () => {

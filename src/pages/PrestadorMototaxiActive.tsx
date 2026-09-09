@@ -9,6 +9,7 @@ import PrimaryButtonLight from "@/components/prestador/PrimaryButtonLight";
 import { calcSplit, formatBRL, SPLIT_META } from "@/utils/ride";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/lib/supabase";
+import QuickStatusMessages from "@/components/mototaxi/QuickStatusMessages";
 
 const ICONS = { User: UserIcon, Building2, Users, Gift, Star, Heart } as const;
 type IconKey = keyof typeof ICONS;
@@ -55,6 +56,23 @@ const PrestadorMototaxiActive = () => {
   const [ride, setRide] = useState<ActiveRide | null>(null);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
+  const [lastSentPhrase, setLastSentPhrase] = useState<string | null>(null);
+
+  const handleSendQuickMessage = async (text: string) => {
+    setLastSentPhrase(text);
+    if (ride?.id) {
+      try {
+        const channel = supabase.channel(`ride_${ride.id}`);
+        await channel.send({
+          type: 'broadcast',
+          event: 'quick_message',
+          payload: { text, from: 'prestador', ts: Date.now() }
+        });
+      } catch (e) {
+        console.warn("Falha ao transmitir mensagem do prestador:", e);
+      }
+    }
+  };
 
   // Carregar dados da corrida do banco
   useEffect(() => {
@@ -429,14 +447,12 @@ const PrestadorMototaxiActive = () => {
               );
             })()}
 
-            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-              <button
-                className="shrink-0 px-3 h-9 rounded-full font-sans text-[13px]"
-                style={{ background: "var(--prestador-bg)", border: "1px solid var(--prestador-border)", color: "#FFFFFF" }}
-              >
-                Já estou chegando 🏍
-              </button>
-            </div>
+            <QuickStatusMessages
+              role="prestador"
+              onSendMessage={handleSendQuickMessage}
+              lastSentPhrase={lastSentPhrase}
+              className="mt-3"
+            />
 
             <div className="mt-4">
               <PrimaryButtonLight onClick={startRide}>
@@ -465,17 +481,12 @@ const PrestadorMototaxiActive = () => {
               </div>
             </div>
 
-            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-              {["A caminho 🏍", "Quase lá ✅", "Aguarde 1 min ⏱"].map((m) => (
-                <button
-                  key={m}
-                  className="shrink-0 px-3 h-9 rounded-full font-sans text-[13px]"
-                  style={{ background: "var(--prestador-bg)", border: "1px solid var(--prestador-border)", color: "#FFFFFF" }}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
+            <QuickStatusMessages
+              role="prestador"
+              onSendMessage={handleSendQuickMessage}
+              lastSentPhrase={lastSentPhrase}
+              className="mt-3"
+            />
 
             <div className="mt-4">
               <PrimaryButtonLight onClick={completeRide}>

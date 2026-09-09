@@ -161,6 +161,7 @@ const App = () => (
                 <Route path="/app/mototaxi" element={<MototaxiTomador />} />
                 <Route path="/app/prestador/home" element={<PrestadorHome />} />
                 <Route path="/app/prestador/mototaxi/onboarding" element={<PrestadorMototaxiOnboarding />} />
+                <Route path="/app/prestador/mototaxi/config" element={<PrestadorMototaxiOnboarding />} />
                 <Route path="/app/prestador/mototaxi/kyc-pending" element={<PrestadorKycPending />} />
                 <Route path="/app/prestador/mototaxi/online" element={<PrestadorMototaxiOnline />} />
                 <Route path="/app/prestador/mototaxi/active" element={<PrestadorMototaxiActive />} />
