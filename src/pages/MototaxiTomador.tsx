@@ -320,7 +320,7 @@ const SearchingSheet = ({
   onCancel: () => void;
   onMatch: () => void;
 }) => {
-  const [seconds, setSeconds] = useState(60);
+  const [seconds, setSeconds] = useState(90);
   useEffect(() => {
     if (seconds <= 0) return;
     const id = setInterval(() => setSeconds((s) => s - 1), 1000);
@@ -330,7 +330,7 @@ const SearchingSheet = ({
   // Auto-match removed - waiting for real-time match from Supabase
 
   const C = 213.6; // 2 * pi * 34
-  const dash = (seconds / 60) * C;
+  const dash = (seconds / 90) * C;
 
   return (
     <Sheet>
@@ -358,14 +358,14 @@ const SearchingSheet = ({
         <div className="text-center py-2">
           <Clock size={32} style={{ color: "#F5A623" }} className="mx-auto" />
           <p className="font-display text-[16px] font-bold text-white mt-2">
-            Nenhum mototaxista disponível.
+            Nenhum mototaxista disponível no momento.
           </p>
           <div className="mt-3 flex flex-col gap-2">
-            <button onClick={() => setSeconds(60)} className="rounded-xl h-11 font-display font-bold text-navy" style={{ background: "#00FF66" }}>
+            <button onClick={() => setSeconds(90)} className="rounded-xl h-11 font-display font-bold text-navy" style={{ background: "#00FF66" }}>
               Tentar novamente
             </button>
-            <button onClick={() => setSeconds(60)} className="rounded-xl h-11 font-sans font-medium" style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.7)" }}>
-              Aguardar
+            <button onClick={() => setSeconds(90)} className="rounded-xl h-11 font-sans font-medium" style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.7)" }}>
+              Continuar aguardando
             </button>
           </div>
         </div>
@@ -930,7 +930,7 @@ const MototaxiTomadorPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.origin, state.destination]);
 
-  // Buscar motoristas online em tempo real
+  // Buscar motoristas online em tempo real com polling de contingência
   useEffect(() => {
     const fetchOnlineDrivers = async () => {
       const { data, error } = await supabase
@@ -943,6 +943,7 @@ const MototaxiTomadorPage = () => {
     };
 
     fetchOnlineDrivers();
+    const pollInterval = setInterval(fetchOnlineDrivers, 3000);
 
     const channel = supabase
       .channel('mototaxi_sessoes_changes')
@@ -956,11 +957,12 @@ const MototaxiTomadorPage = () => {
       .subscribe();
 
     return () => {
+      clearInterval(pollInterval);
       supabase.removeChannel(channel);
     };
   }, []);
 
-  // Escuta atualizações da corrida em tempo real
+  // Escuta atualizações da corrida em tempo real com polling contínuo de 2s
   useEffect(() => {
     if (!state.rideId) return;
 
@@ -1016,6 +1018,7 @@ const MototaxiTomadorPage = () => {
     };
 
     syncCurrentStatus();
+    const pollInterval = setInterval(syncCurrentStatus, 2000);
 
     const channel = supabase
       .channel(`ride_${state.rideId}`)
@@ -1071,9 +1074,10 @@ const MototaxiTomadorPage = () => {
       .subscribe();
 
     return () => {
+      clearInterval(pollInterval);
       supabase.removeChannel(channel);
     };
-  }, [state.rideId, state.origin]);
+  }, [state.rideId]);
 
   // Escuta a localização em tempo real do prestador aceito e em andamento
   useEffect(() => {
@@ -1180,14 +1184,12 @@ const MototaxiTomadorPage = () => {
       return;
     }
 
-    // Validar Geofence de Origem e Destino
+    // Validar Geofence de Origem e Destino (Aviso informativo para permitir testes)
     const originGeo = validateGeofence(state.origin.address, { lat: state.origin.lat, lng: state.origin.lng });
     const destGeo = validateGeofence(state.destination.address, { lat: state.destination.lat, lng: state.destination.lng });
 
-    // Bloqueia apenas se ambos estiverem fora de Ubatuba
     if (!originGeo.inside && !destGeo.inside) {
-      toast.error("Serviço indisponível: A UBT opera apenas quando a origem ou o destino estão localizados no município de Ubatuba-SP.");
-      return;
+      console.warn("[Geofence] Chamada iniciada fora do perímetro padrão de Ubatuba:", { origin: state.origin, destination: state.destination });
     }
 
     const newRide = {

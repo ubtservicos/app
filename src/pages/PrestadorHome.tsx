@@ -118,41 +118,53 @@ const PrestadorHome = () => {
     coco: false
   });
 
+  const [registeredServices, setRegisteredServices] = useState<{
+    mototaxi: boolean;
+    ambulante: boolean;
+    diarista: boolean;
+    coco: boolean;
+    loaded: boolean;
+  }>({
+    mototaxi: false,
+    ambulante: false,
+    diarista: false,
+    coco: false,
+    loaded: false,
+  });
+
   const [pedidosAmbulante, setPedidosAmbulante] = useState<any[]>([]);
   const [activeCaminhao, setActiveCaminhao] = useState<any | null>(null);
-
-  // Check configurations
-  const hasMototaxi = user.kycStatus === "approved";
-  const isMototaxiPending = user.kycStatus === "pending";
-  const hasAmbulante = (() => { try { return localStorage.getItem(`amb_session_${user.uid}`) === "1"; } catch { return false; } })();
-  const hasDiarista = (() => { try { return localStorage.getItem(`diarista_perfil_${user.uid}`) === "1"; } catch { return false; } })();
-  const hasCoco = user.role === "cocoecia" || user.role === "cocoecia-colaborador" || user.role === "cocoecia-dirigentes" || (() => { try { return !!localStorage.getItem("caminhaoId"); } catch { return false; } })();
 
   useEffect(() => {
     if (!user.uid) return;
 
     const fetchAllServiceStatuses = async () => {
       try {
-        // 1. Mototáxi
-        const { data: motoData } = await supabase
-          .from("mototaxi_sessoes")
-          .select("is_online")
-          .eq("prestador_id", user.uid)
-          .maybeSingle();
+        // 1. Mototáxi (Sessão e Perfil de prestador)
+        const [
+          { data: motoData },
+          { data: motoPerfil },
+          { data: ambData },
+          { data: diaData }
+        ] = await Promise.all([
+          supabase.from("mototaxi_sessoes").select("is_online").eq("prestador_id", user.uid).maybeSingle(),
+          supabase.from("prestador_mototaxi").select("user_id, kyc_status").eq("user_id", user.uid).maybeSingle(),
+          supabase.from("ambulante_sessions").select("is_online").eq("id", user.uid).maybeSingle(),
+          supabase.from("diarista_perfis").select("is_online").eq("user_id", user.uid).maybeSingle()
+        ]);
 
-        // 2. Ambulante
-        const { data: ambData } = await supabase
-          .from("ambulante_sessions")
-          .select("is_online")
-          .eq("id", user.uid)
-          .maybeSingle();
+        const hasMoto = !!motoPerfil || !!motoData || user.role === "mototaxista" || user.role === "mototaxi" || user.kycStatus === "approved" || localStorage.getItem(`moto_session_${user.uid}`) === "1";
+        const hasAmb = !!ambData || user.role === "ambulante" || localStorage.getItem(`amb_session_${user.uid}`) === "1";
+        const hasDia = !!diaData || user.role === "diarista" || localStorage.getItem(`diarista_perfil_${user.uid}`) === "1";
+        const hasCc = user.role === "cocoecia" || user.role === "cocoecia-colaborador" || user.role === "cocoecia-dirigentes" || !!localStorage.getItem("caminhaoId");
 
-        // 3. Diarista
-        const { data: diaData } = await supabase
-          .from("diarista_perfis")
-          .select("is_online")
-          .eq("user_id", user.uid)
-          .maybeSingle();
+        setRegisteredServices({
+          mototaxi: hasMoto,
+          ambulante: hasAmb,
+          diarista: hasDia,
+          coco: hasCc,
+          loaded: true,
+        });
 
         setActiveServices((prev) => ({
           ...prev,
@@ -166,7 +178,7 @@ const PrestadorHome = () => {
     };
 
     fetchAllServiceStatuses();
-  }, [user.uid]);
+  }, [user.uid, user.role, user.kycStatus]);
 
   useEffect(() => {
     const caminhaoId = localStorage.getItem("caminhaoId");
@@ -458,7 +470,7 @@ const PrestadorHome = () => {
         </h2>
         <div className="flex flex-col gap-3">
           
-          {hasMototaxi && (
+          {registeredServices.mototaxi && (
             <div
               className="flex items-center w-full rounded-[20px] p-4 text-left"
               style={{ background: theme.surface, border: `1px solid ${theme.border}` }}
@@ -484,7 +496,7 @@ const PrestadorHome = () => {
             </div>
           )}
 
-          {hasAmbulante && (
+          {registeredServices.ambulante && (
             <div
               className="flex items-center w-full rounded-[20px] p-4 text-left"
               style={{ background: theme.surface, border: `1px solid ${theme.border}` }}
@@ -510,7 +522,7 @@ const PrestadorHome = () => {
             </div>
           )}
 
-          {hasDiarista && (
+          {registeredServices.diarista && (
             <div
               className="flex items-center w-full rounded-[20px] p-4 text-left"
               style={{ background: theme.surface, border: `1px solid ${theme.border}` }}
@@ -536,7 +548,7 @@ const PrestadorHome = () => {
             </div>
           )}
 
-          {hasCoco && (
+          {registeredServices.coco && (
             <div
               className="flex items-center w-full rounded-[20px] p-4 text-left"
               style={{ background: theme.surface, border: `1px solid ${theme.border}` }}
@@ -562,7 +574,7 @@ const PrestadorHome = () => {
             </div>
           )}
 
-          {!hasMototaxi && !hasAmbulante && !hasDiarista && !hasCoco && (
+          {registeredServices.loaded && !registeredServices.mototaxi && !registeredServices.ambulante && !registeredServices.diarista && !registeredServices.coco && (
             <div className="text-center py-6">
               <p className="font-sans text-[14px]" style={{ color: theme.muted }}>Você ainda não configurou nenhum serviço.</p>
             </div>
