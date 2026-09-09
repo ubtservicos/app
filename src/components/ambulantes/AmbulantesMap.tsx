@@ -1,7 +1,7 @@
 import React from 'react';
-import { Marker } from '@vis.gl/react-google-maps';
+import { AdvancedMarker } from '@vis.gl/react-google-maps';
 import { getCategoriaIcon, type AmbulanteSession } from '@/mocks/ambulantesSessions';
-import { tomadorIcon } from '@/lib/mapIcons';
+import { TomadorMarker, AmbulanteMarker } from '@/lib/mapIcons';
 import { UBTMap, isValidLatLng, UBATUBA_CENTER } from '@/components/UBTMap';
 
 interface Props {
@@ -19,16 +19,20 @@ const AmbulantesMap = ({ center, sessions, onMarkerClick, height = '100%' }: Pro
 
   return (
     <UBTMap center={mapCenter} zoom={15} style={{ width: '100%', height }}>
-      <Marker position={mapCenter} icon={tomadorIcon} />
+      <AdvancedMarker position={mapCenter}>
+        <TomadorMarker />
+      </AdvancedMarker>
       {sessions.map((s) => {
         if (!s?.location || !isValidLatLng(s.location.lat, s.location.lng)) return null;
         const cat = getCategoriaIcon(s.produtos);
         return (
-          <Marker
+          <AdvancedMarker
             key={s.sessionId}
             position={{ lat: Number(s.location.lat), lng: Number(s.location.lng) }}
             onClick={() => onMarkerClick?.(s)}
-          />
+          >
+            <AmbulanteMarker categoria={cat} />
+          </AdvancedMarker>
         );
       })}
     </UBTMap>

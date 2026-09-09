@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Marker } from '@vis.gl/react-google-maps';
+import { AdvancedMarker } from '@vis.gl/react-google-maps';
 import type { LatLngAddr, RideStatus } from '@/contexts/RideContext';
-import { tomadorIcon, motoIcon, destinoIcon } from '@/lib/mapIcons';
+import { TomadorMarker, MotoMarker, DestinoMarker } from '@/lib/mapIcons';
 import { getRouteInfo } from '@/lib/geoService';
 import { UBTMap, GooglePolyline, MapFlyTo, isValidLatLng, UBATUBA_CENTER } from '@/components/UBTMap';
 
@@ -75,22 +75,29 @@ const MototaxiMap = ({
   return (
     <UBTMap center={mapCenter} zoom={15} style={{ width: '100%', height }}>
       {origin && isValidLatLng(origin.lat, origin.lng) && (
-        <Marker position={{ lat: Number(origin.lat), lng: Number(origin.lng) }} icon={tomadorIcon} />
+        <AdvancedMarker position={{ lat: Number(origin.lat), lng: Number(origin.lng) }}>
+          <TomadorMarker />
+        </AdvancedMarker>
       )}
       {destination && isValidLatLng(destination.lat, destination.lng) && (
-        <Marker position={{ lat: Number(destination.lat), lng: Number(destination.lng) }} icon={destinoIcon} />
+        <AdvancedMarker position={{ lat: Number(destination.lat), lng: Number(destination.lng) }}>
+          <DestinoMarker />
+        </AdvancedMarker>
       )}
       {prestadorLocation && isValidLatLng(prestadorLocation.lat, prestadorLocation.lng) && (
-        <Marker position={{ lat: Number(prestadorLocation.lat), lng: Number(prestadorLocation.lng) }} icon={motoIcon(true)} />
+        <AdvancedMarker position={{ lat: Number(prestadorLocation.lat), lng: Number(prestadorLocation.lng) }}>
+          <MotoMarker isOnline={true} />
+        </AdvancedMarker>
       )}
       {onlineDrivers && onlineDrivers.map((d) => {
         if (!d || !isValidLatLng(d.lat, d.lng)) return null;
         return (
-          <Marker 
+          <AdvancedMarker 
             key={d.id} 
             position={{ lat: Number(d.lat), lng: Number(d.lng) }} 
-            icon={motoIcon(true)} 
-          />
+          >
+            <MotoMarker isOnline={true} />
+          </AdvancedMarker>
         );
       })}
       {polyline.length > 0 && <GooglePolyline path={polyline} color="#0DB87E" weight={4} />}

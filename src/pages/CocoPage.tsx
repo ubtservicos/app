@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Marker } from '@vis.gl/react-google-maps';
+import { AdvancedMarker } from '@vis.gl/react-google-maps';
 
 import { 
   ArrowLeft, 
@@ -28,7 +28,7 @@ import {
   type CaminhaoCoco,
 } from "@/mocks/cocoMock";
 import { getPinIcon, getTruckIcon, getTruckIconUrl } from "@/utils/cocoIcons";
-import { tomadorIcon } from "@/lib/mapIcons";
+import { TomadorMarker, ColetaMarker, CaminhaoMarker } from "@/lib/mapIcons";
 import { reverseGeocode } from "@/lib/geoService";
 import { MapRef, DARK_TILES, ATTRIBUTION, UBATUBA_CENTER, isValidLatLng } from "@/components/UBTMap";
 import { supabase } from "@/lib/supabase";
@@ -384,29 +384,33 @@ const CocoPage = () => {
           <UBTMap
             center={{ lat: center?.lat || -23.4332, lng: center?.lng || -45.0711 }}
             zoom={14}
-            style={{ width: "100%", height: "400px" }}
+            style={{ width: "100%", height: "100%" }}
           >
-            <Marker position={{ lat: center?.lat || -23.4332, lng: center?.lng || -45.0711 }} icon={tomadorIcon} />
+            <AdvancedMarker position={{ lat: center?.lat || -23.4332, lng: center?.lng || -45.0711 }}>
+              <TomadorMarker />
+            </AdvancedMarker>
             {pontos.map((p) => {
               if (!p.lat || !p.lng || isNaN(Number(p.lat)) || isNaN(Number(p.lng))) return null;
               return (
-                <Marker
+                <AdvancedMarker
                   key={p.id}
                   position={{ lat: Number(p.lat), lng: Number(p.lng) }}
-                  icon={getPinIcon(p.material)}
                   onClick={() => setSelectedPonto(p)}
-                />
+                >
+                  <ColetaMarker material={p.material} />
+                </AdvancedMarker>
               );
             })}
             {caminhoes.map((c) => {
               if (!c.location?.lat || !c.location?.lng || isNaN(Number(c.location.lat)) || isNaN(Number(c.location.lng))) return null;
               return (
-                <Marker
+                <AdvancedMarker
                   key={c.id}
                   position={{ lat: Number(c.location.lat), lng: Number(c.location.lng) }}
-                  icon={getTruckIcon(c.isOnline)}
                   onClick={() => setSelectedCaminhao(c)}
-                />
+                >
+                  <CaminhaoMarker isOnline={c.isOnline} />
+                </AdvancedMarker>
               );
             })}
           </UBTMap>

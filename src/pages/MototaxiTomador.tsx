@@ -21,7 +21,7 @@ import MototaxiMap from "@/components/mototaxi/MototaxiMap";
 import SplitBreakdown from "@/components/mototaxi/SplitBreakdown";
 import { calcPrice, formatBRL } from "@/utils/ride";
 import { useRide, type RideType } from "@/contexts/RideContext";
-import { searchAddressesWithSessionToken, getPlaceDetails, type AutocompleteSuggestion } from "@/lib/geoService";
+import { searchAddressesWithSessionToken, getPlaceDetails, createAutocompleteSessionToken, type AutocompleteSuggestion } from "@/lib/geoService";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { createPreference, calculateSplit } from "@/lib/mercadoPago";
 import { supabase } from "@/lib/supabase";
@@ -93,11 +93,7 @@ const IdleSheet = ({
   const destSessionTokenRef = useRef<any>(null);
 
   const initDestSessionToken = () => {
-    if (typeof window !== 'undefined' && (window as any).google?.maps?.places?.AutocompleteSessionToken) {
-      destSessionTokenRef.current = new (window as any).google.maps.places.AutocompleteSessionToken();
-    } else {
-      destSessionTokenRef.current = 'session_' + Math.random().toString(36).substring(2, 15);
-    }
+    destSessionTokenRef.current = createAutocompleteSessionToken();
   };
 
   useEffect(() => {
@@ -129,7 +125,8 @@ const IdleSheet = ({
 
   const handleSelectDest = async (r: AutocompleteSuggestion) => {
     setSearchingDest(true);
-    const details = await getPlaceDetails(r.placeId, destSessionTokenRef.current);
+    const token = destSessionTokenRef.current;
+    const details = await getPlaceDetails(r.placeId, token);
     initDestSessionToken();
 
     const userNumberMatch = destQuery.match(/(?:,\s*|n[º°]?\s*|\s+)(\d+[a-zA-Z]?)(?:\b|$)/i) || destQuery.match(/(\d+)/);

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Marker } from '@vis.gl/react-google-maps';
-import { tomadorIcon, motoIcon, destinoIcon } from '../lib/mapIcons';
+import { AdvancedMarker } from '@vis.gl/react-google-maps';
+import { TomadorMarker, MotoMarker, DestinoMarker } from '../lib/mapIcons';
 import { getRouteInfo } from '../lib/geoService';
 import { UBTMap, GooglePolyline, MapFlyTo, isValidLatLng, UBATUBA_CENTER } from './UBTMap';
 
@@ -44,13 +44,19 @@ export function MototaxiMap({
   return (
     <UBTMap center={center} zoom={15} style={{ width: '100%', height, zIndex: 0 }}>
       {origin && isValidLatLng(origin.lat, origin.lng) && (
-        <Marker position={{ lat: Number(origin.lat), lng: Number(origin.lng) }} icon={tomadorIcon} />
+        <AdvancedMarker position={{ lat: Number(origin.lat), lng: Number(origin.lng) }}>
+          <TomadorMarker />
+        </AdvancedMarker>
       )}
       {destination && isValidLatLng(destination.lat, destination.lng) && (
-        <Marker position={{ lat: Number(destination.lat), lng: Number(destination.lng) }} icon={destinoIcon} />
+        <AdvancedMarker position={{ lat: Number(destination.lat), lng: Number(destination.lng) }}>
+          <DestinoMarker />
+        </AdvancedMarker>
       )}
       {prestadorLocation && isValidLatLng(prestadorLocation.lat, prestadorLocation.lng) && (
-        <Marker position={{ lat: Number(prestadorLocation.lat), lng: Number(prestadorLocation.lng) }} icon={motoIcon(isPrestadorOnline)} />
+        <AdvancedMarker position={{ lat: Number(prestadorLocation.lat), lng: Number(prestadorLocation.lng) }}>
+          <MotoMarker isOnline={isPrestadorOnline} />
+        </AdvancedMarker>
       )}
       {polyline.length > 0 && <GooglePolyline path={polyline} color="#0DB87E" weight={4} />}
       {origin && isValidLatLng(origin.lat, origin.lng) && (

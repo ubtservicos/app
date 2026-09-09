@@ -227,6 +227,18 @@ export const reverseGeocode = async (lat: number, lng: number): Promise<string> 
   }
 };
 
+// Helper para criar ou instanciar Session Token do Google Places SDK
+export const createAutocompleteSessionToken = (): any => {
+  if (typeof window !== 'undefined' && (window as any).google?.maps?.places?.AutocompleteSessionToken) {
+    try {
+      return new (window as any).google.maps.places.AutocompleteSessionToken();
+    } catch {
+      return null;
+    }
+  }
+  return null;
+};
+
 // Interface para Autocomplete com Session Token
 export interface AutocompleteSuggestion {
   placeId: string;
@@ -240,7 +252,7 @@ export interface AutocompleteSuggestion {
 // Autocomplete de Endereços com Session Token Google Maps Places
 export const searchAddressesWithSessionToken = async (
   query: string,
-  sessionToken?: string
+  sessionToken?: any
 ): Promise<AutocompleteSuggestion[]> => {
   if (!query || query.trim().length < 2) return [];
 
@@ -255,14 +267,24 @@ export const searchAddressesWithSessionToken = async (
         const ne = new google.maps.LatLng(UBATUBA_BOUNDS.north, UBATUBA_BOUNDS.east);
         const bounds = new google.maps.LatLngBounds(sw, ne);
 
+        const isNativeSessionToken =
+          sessionToken &&
+          google?.maps?.places?.AutocompleteSessionToken &&
+          sessionToken instanceof google.maps.places.AutocompleteSessionToken;
+
+        const requestOptions: any = {
+          input: query + ', Ubatuba',
+          componentRestrictions: { country: 'br' },
+          bounds,
+          locationBias: bounds,
+        };
+
+        if (isNativeSessionToken) {
+          requestOptions.sessionToken = sessionToken;
+        }
+
         autocompleteService.getPlacePredictions(
-          {
-            input: query + ', Ubatuba',
-            componentRestrictions: { country: 'br' },
-            bounds,
-            locationBias: bounds,
-            sessionToken: sessionToken ? (sessionToken as any) : undefined,
-          },
+          requestOptions,
           (predictions: any[], status: any) => {
             if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
               const formatted: AutocompleteSuggestion[] = predictions.map((p: any) => ({
@@ -288,7 +310,7 @@ export const searchAddressesWithSessionToken = async (
   if (GOOGLE_KEY) {
     try {
       const encoded = encodeURIComponent(query + ', Ubatuba');
-      const tokenParam = sessionToken ? `&sessiontoken=${sessionToken}` : '';
+      const tokenParam = (typeof sessionToken === 'string' && sessionToken) ? `&sessiontoken=${sessionToken}` : '';
       const locationBias = `&location=${UBATUBA_CENTER.lat},${UBATUBA_CENTER.lng}&radius=25000`;
       const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encoded}&components=country:br&language=pt-BR${locationBias}${tokenParam}&key=${GOOGLE_KEY}`;
       const res = await fetch(url);
@@ -312,7 +334,7 @@ export const searchAddressesWithSessionToken = async (
 // Obter Detalhes do Lugar por PlaceID (com Session Token para fechar a sessão com billing consolidado)
 export const getPlaceDetails = async (
   placeId: string,
-  sessionToken?: string
+  sessionToken?: any
 ): Promise<{ lat: number; lng: number; formattedAddress: string } | null> => {
   if (typeof window !== 'undefined' && (window as any).google?.maps?.places) {
     return new Promise((resolve) => {
@@ -321,12 +343,22 @@ export const getPlaceDetails = async (
         const dummyDiv = document.createElement('div');
         const placesService = new google.maps.places.PlacesService(dummyDiv);
 
+        const isNativeSessionToken =
+          sessionToken &&
+          google?.maps?.places?.AutocompleteSessionToken &&
+          sessionToken instanceof google.maps.places.AutocompleteSessionToken;
+
+        const detailsOptions: any = {
+          placeId,
+          fields: ['geometry', 'formatted_address', 'name'],
+        };
+
+        if (isNativeSessionToken) {
+          detailsOptions.sessionToken = sessionToken;
+        }
+
         placesService.getDetails(
-          {
-            placeId,
-            fields: ['geometry', 'formatted_address', 'name'],
-            sessionToken: sessionToken ? (sessionToken as any) : undefined,
-          },
+          detailsOptions,
           (result: any, status: any) => {
             if (status === google.maps.places.PlacesServiceStatus.OK && result?.geometry?.location) {
               resolve({
@@ -349,7 +381,7 @@ export const getPlaceDetails = async (
   // Fallback REST API
   if (GOOGLE_KEY) {
     try {
-      const tokenParam = sessionToken ? `&sessiontoken=${sessionToken}` : '';
+      const tokenParam = (typeof sessionToken === 'string' && sessionToken) ? `&sessiontoken=${sessionToken}` : '';
       const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=geometry,formatted_address,name${tokenParam}&key=${GOOGLE_KEY}`;
       const res = await fetch(url);
       const data = await res.json();

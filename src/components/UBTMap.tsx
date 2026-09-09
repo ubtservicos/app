@@ -3,7 +3,6 @@ import {
   APIProvider,
   Map as GoogleMap,
   AdvancedMarker,
-  Marker,
   useMap,
   useMapsLibrary
 } from '@vis.gl/react-google-maps';
@@ -112,6 +111,7 @@ interface UBTMapProps {
   style?: React.CSSProperties;
   children?: React.ReactNode;
   dark?: boolean;
+  mapId?: string;
   onClick?: (lat: number, lng: number) => void;
   gestureHandling?: 'cooperative' | 'greedy' | 'none' | 'auto';
 }
@@ -122,6 +122,7 @@ export function UBTMap({
   style = { width: '100%', height: '400px' },
   children,
   dark = true,
+  mapId = 'ubt_dark_map',
   onClick,
   gestureHandling = 'greedy',
 }: UBTMapProps) {
@@ -130,8 +131,9 @@ export function UBTMap({
     : { lat: Number(center.lat), lng: Number(center.lng) };
 
   return (
-    <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['places', 'routes', 'geometry']}>
+    <APIProvider apiKey={GOOGLE_MAPS_API_KEY} libraries={['places', 'routes', 'geometry', 'marker']}>
       <GoogleMap
+        mapId={mapId}
         defaultCenter={defaultCenter}
         defaultZoom={zoom}
         style={style}
@@ -150,4 +152,5 @@ export function UBTMap({
   );
 }
 
+export { AdvancedMarker };
 export default UBTMap;

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Marker } from '@vis.gl/react-google-maps';
+import { AdvancedMarker } from '@vis.gl/react-google-maps';
 
 import { ArrowLeft, Settings, X, Calendar, Check, Compass, CheckCircle, MapPin } from "lucide-react";
 import { MOCK_COCO_CONFIG, type PontoColeta } from "@/mocks/cocoMock";
 import { getMaterial } from "@/mocks/cocoMateriais";
 import { getPinIcon, getTruckIcon, getTruckIconUrl } from "@/utils/cocoIcons";
+import { CaminhaoMarker, ColetaMarker } from "@/lib/mapIcons";
 import { formatDist, haversineKm } from "@/utils/geo";
 import { UBTMap, isValidLatLng, UBATUBA_CENTER } from '@/components/UBTMap';
 import { supabase } from "@/lib/supabase";
@@ -955,22 +956,25 @@ const CocoOnlinePage = () => {
           <UBTMap
             center={{ lat: myLocation?.lat || -23.432, lng: myLocation?.lng || -45.083 }}
             zoom={14}
-            style={{ width: "100%", height: "400px" }}
+            style={{ width: "100%", height: "100%" }}
           >
-            <Marker position={{ lat: myLocation?.lat || -23.432, lng: myLocation?.lng || -45.083 }} icon={getTruckIcon(isOnline)} />
+            <AdvancedMarker position={{ lat: myLocation?.lat || -23.432, lng: myLocation?.lng || -45.083 }}>
+              <CaminhaoMarker isOnline={isOnline} />
+            </AdvancedMarker>
             {pontos.map((p) => {
               if (!p.lat || !p.lng || isNaN(Number(p.lat)) || isNaN(Number(p.lng))) return null;
               return (
-                <Marker
+                <AdvancedMarker
                   key={p.id}
                   position={{ lat: Number(p.lat), lng: Number(p.lng) }}
-                  icon={getPinIcon(p.material)}
                   onClick={() => setSelectedPonto(p)}
-                />
+                >
+                  <ColetaMarker material={p.material} />
+                </AdvancedMarker>
               );
             })}
           </UBTMap>
-      )}
+        )}
       </div>
 
       {/* Bottom sheet */}

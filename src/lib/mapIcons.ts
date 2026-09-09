@@ -1,3 +1,5 @@
+export * from './mapIcons.tsx';
+
 // Helper to create an SVG data URL with an emoji badge
 const createEmojiIconSvg = (emoji: string, bgColor: string, size = 38): string => {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">

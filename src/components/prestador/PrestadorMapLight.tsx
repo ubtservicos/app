@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Marker } from '@vis.gl/react-google-maps';
-import { motoIcon, tomadorIcon, destinoIcon, ambuIcon, coletaIcon } from '@/lib/mapIcons';
+import { AdvancedMarker } from '@vis.gl/react-google-maps';
+import { MotoMarker, TomadorMarker, DestinoMarker, AmbulanteMarker, ColetaMarker } from '@/lib/mapIcons';
 import { getRouteInfo } from '@/lib/geoService';
 import { UBTMap, GooglePolyline, isValidLatLng, UBATUBA_CENTER } from '@/components/UBTMap';
 
@@ -9,6 +9,7 @@ interface Props {
   origin?: { lat: number; lng: number } | null;
   destination?: { lat: number; lng: number } | null;
   routeFrom?: { lat: number; lng: number } | null;
+  routeTo?: { lat: number; lng: number } | null;
   providerType?: 'mototaxi' | 'ambulante' | 'coco';
   height?: string;
 }
@@ -68,16 +69,27 @@ const PrestadorMapLight = ({
   return (
     <UBTMap center={center} zoom={15} style={{ width: '100%', height }}>
       {myLocation && isValidLatLng(myLocation.lat, myLocation.lng) && (
-        <Marker
+        <AdvancedMarker
           position={{ lat: Number(myLocation.lat), lng: Number(myLocation.lng) }}
-          icon={providerType === 'ambulante' ? ambuIcon('comida') : providerType === 'coco' ? coletaIcon('misto') : motoIcon(true)}
-        />
+        >
+          {providerType === 'ambulante' ? (
+            <AmbulanteMarker categoria="comida" />
+          ) : providerType === 'coco' ? (
+            <ColetaMarker material="misto" />
+          ) : (
+            <MotoMarker isOnline={true} />
+          )}
+        </AdvancedMarker>
       )}
       {origin && isValidLatLng(origin.lat, origin.lng) && (
-        <Marker position={{ lat: Number(origin.lat), lng: Number(origin.lng) }} icon={tomadorIcon} />
+        <AdvancedMarker position={{ lat: Number(origin.lat), lng: Number(origin.lng) }}>
+          <TomadorMarker />
+        </AdvancedMarker>
       )}
       {destination && isValidLatLng(destination.lat, destination.lng) && (
-        <Marker position={{ lat: Number(destination.lat), lng: Number(destination.lng) }} icon={destinoIcon} />
+        <AdvancedMarker position={{ lat: Number(destination.lat), lng: Number(destination.lng) }}>
+          <DestinoMarker />
+        </AdvancedMarker>
       )}
       {polyline.length > 0 && <GooglePolyline path={polyline} color="#0DB87E" weight={4} />}
     </UBTMap>

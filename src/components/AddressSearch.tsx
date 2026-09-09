@@ -3,6 +3,7 @@ import { MapPin, Search, X } from 'lucide-react';
 import {
   searchAddressesWithSessionToken,
   getPlaceDetails,
+  createAutocompleteSessionToken,
   AutocompleteSuggestion,
   searchAddresses
 } from '../lib/geoService';
@@ -21,13 +22,9 @@ export function AddressSearch({ value, onChange, placeholder = 'Digite o endere�
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const sessionTokenRef = useRef<any>(null);
 
-  // Inicializa ou renova o Session Token do Google Places
+  // Inicializa ou renova o Session Token nativo do Google Places
   const initSessionToken = () => {
-    if (typeof window !== 'undefined' && (window as any).google?.maps?.places?.AutocompleteSessionToken) {
-      sessionTokenRef.current = new (window as any).google.maps.places.AutocompleteSessionToken();
-    } else {
-      sessionTokenRef.current = 'session_' + Math.random().toString(36).substring(2, 15);
-    }
+    sessionTokenRef.current = createAutocompleteSessionToken();
   };
 
   useEffect(() => {
@@ -58,8 +55,9 @@ export function AddressSearch({ value, onChange, placeholder = 'Digite o endere�
 
   const handleSelectSuggestion = async (s: AutocompleteSuggestion) => {
     setLoading(true);
-    const details = await getPlaceDetails(s.placeId, sessionTokenRef.current);
-    // Renovar token de sessão para a próxima busca
+    const token = sessionTokenRef.current;
+    const details = await getPlaceDetails(s.placeId, token);
+    // Renovar token de sessão para a próxima busca imediatamente após a conclusão
     initSessionToken();
 
     const userNumberMatch = value.match(/(?:,\s*|n[º°]?\s*|\s+)(\d+[a-zA-Z]?)(?:\b|$)/i) || value.match(/(\d+)/);
