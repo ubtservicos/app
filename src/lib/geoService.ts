@@ -227,7 +227,7 @@ export const reverseGeocode = async (lat: number, lng: number): Promise<string> 
   }
 };
 
-// Helper para criar ou instanciar Session Token do Google Places SDK
+// Helper para criar ou instanciar Session Token do Google Places SDK (New)
 export const createAutocompleteSessionToken = (): any => {
   if (typeof window !== 'undefined' && (window as any).google?.maps?.places?.AutocompleteSessionToken) {
     try {
@@ -249,151 +249,171 @@ export interface AutocompleteSuggestion {
   lng?: number;
 }
 
-// Autocomplete de Endereços com Session Token Google Maps Places
+// Autocomplete de Endereços com Places API (New)
 export const searchAddressesWithSessionToken = async (
   query: string,
   sessionToken?: any
 ): Promise<AutocompleteSuggestion[]> => {
   if (!query || query.trim().length < 2) return [];
 
-  // Se a SDK Google Maps JS estiver carregada na window, usa AutocompleteService
-  if (typeof window !== 'undefined' && (window as any).google?.maps?.places) {
-    return new Promise((resolve) => {
-      try {
-        const google = (window as any).google;
-        const autocompleteService = new google.maps.places.AutocompleteService();
-        
-        const sw = new google.maps.LatLng(UBATUBA_BOUNDS.south, UBATUBA_BOUNDS.west);
-        const ne = new google.maps.LatLng(UBATUBA_BOUNDS.north, UBATUBA_BOUNDS.east);
-        const bounds = new google.maps.LatLngBounds(sw, ne);
-
-        const isNativeSessionToken =
-          sessionToken &&
-          google?.maps?.places?.AutocompleteSessionToken &&
-          sessionToken instanceof google.maps.places.AutocompleteSessionToken;
-
-        const requestOptions: any = {
-          input: query + ', Ubatuba',
-          componentRestrictions: { country: 'br' },
-          bounds,
-          locationBias: bounds,
-        };
-
-        if (isNativeSessionToken) {
-          requestOptions.sessionToken = sessionToken;
-        }
-
-        autocompleteService.getPlacePredictions(
-          requestOptions,
-          (predictions: any[], status: any) => {
-            if (status === google.maps.places.PlacesServiceStatus.OK && predictions) {
-              const formatted: AutocompleteSuggestion[] = predictions.map((p: any) => ({
-                placeId: p.place_id,
-                label: p.description,
-                mainText: p.structured_formatting?.main_text || p.description,
-                secondaryText: p.structured_formatting?.secondary_text || 'Ubatuba, SP',
-              }));
-              resolve(formatted);
-            } else {
-              resolve([]);
-            }
-          }
-        );
-      } catch (err) {
-        console.warn('Erro no Autocomplete JS SDK:', err);
-        resolve([]);
-      }
-    });
-  }
-
-  // Fallback REST API
-  if (GOOGLE_KEY) {
+  // 1. Google Maps Places API (New) via JS SDK
+  if (typeof window !== 'undefined' && (window as any).google?.maps?.places?.AutocompleteSuggestion?.fetchAutocompleteSuggestions) {
     try {
-      const encoded = encodeURIComponent(query + ', Ubatuba');
-      const tokenParam = (typeof sessionToken === 'string' && sessionToken) ? `&sessiontoken=${sessionToken}` : '';
-      const locationBias = `&location=${UBATUBA_CENTER.lat},${UBATUBA_CENTER.lng}&radius=25000`;
-      const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encoded}&components=country:br&language=pt-BR${locationBias}${tokenParam}&key=${GOOGLE_KEY}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data && data.status === 'OK' && data.predictions) {
-        return data.predictions.map((p: any) => ({
-          placeId: p.place_id,
-          label: p.description,
-          mainText: p.structured_formatting?.main_text || p.description,
-          secondaryText: p.structured_formatting?.secondary_text || 'Ubatuba, SP',
-        }));
+      const google = (window as any).google;
+      const isNativeSessionToken =
+        sessionToken &&
+        google?.maps?.places?.AutocompleteSessionToken &&
+        sessionToken instanceof google.maps.places.AutocompleteSessionToken;
+
+      const request: any = {
+        input: query,
+        locationRestriction: {
+          west: UBATUBA_BOUNDS.west,
+          north: UBATUBA_BOUNDS.north,
+          east: UBATUBA_BOUNDS.east,
+          south: UBATUBA_BOUNDS.south,
+        },
+        includedRegionCodes: ['br'],
+        language: 'pt-BR',
+      };
+
+      if (isNativeSessionToken) {
+        request.sessionToken = sessionToken;
+      }
+
+      const response = await google.maps.places.AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
+      if (response && response.suggestions && response.suggestions.length > 0) {
+        const formatted: AutocompleteSuggestion[] = response.suggestions
+          .filter((s: any) => s.placePrediction)
+          .map((s: any) => {
+            const p = s.placePrediction;
+            const label = p.text?.toString() || p.mainText?.toString() || '';
+            const mainText = p.mainText?.toString() || label;
+            const secondaryText = p.secondaryText?.toString() || 'Ubatuba, SP';
+            return {
+              placeId: p.placeId,
+              label,
+              mainText,
+              secondaryText,
+            };
+          });
+        return formatted;
       }
     } catch (err) {
-      console.warn('Erro no Google Places REST Autocomplete:', err);
+      console.warn('Erro fetchAutocompleteSuggestions (Places API New):', err);
+    }
+  }
+
+  // 2. Fallback Places API (New) via REST API v1
+  if (GOOGLE_KEY) {
+    try {
+      const body: any = {
+        input: query,
+        locationRestriction: {
+          rectangle: {
+            low: { latitude: UBATUBA_BOUNDS.south, longitude: UBATUBA_BOUNDS.west },
+            high: { latitude: UBATUBA_BOUNDS.north, longitude: UBATUBA_BOUNDS.east }
+          }
+        },
+        includedRegionCodes: ['br'],
+        languageCode: 'pt-BR'
+      };
+
+      if (typeof sessionToken === 'string' && sessionToken) {
+        body.sessionToken = sessionToken;
+      }
+
+      const res = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': GOOGLE_KEY,
+        },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (data && data.suggestions && data.suggestions.length > 0) {
+        return data.suggestions
+          .filter((s: any) => s.placePrediction)
+          .map((s: any) => {
+            const p = s.placePrediction;
+            const label = p.text?.text || p.structuredFormat?.mainText?.text || '';
+            const mainText = p.structuredFormat?.mainText?.text || label;
+            const secondaryText = p.structuredFormat?.secondaryText?.text || 'Ubatuba, SP';
+            return {
+              placeId: p.placeId,
+              label,
+              mainText,
+              secondaryText,
+            };
+          });
+      }
+    } catch (err) {
+      console.warn('Erro REST v1 places:autocomplete:', err);
     }
   }
 
   return [];
 };
 
-// Obter Detalhes do Lugar por PlaceID (com Session Token para fechar a sessão com billing consolidado)
+// Obter Detalhes do Lugar por PlaceID usando Places API (New) com Place.fetchFields
 export const getPlaceDetails = async (
   placeId: string,
   sessionToken?: any
 ): Promise<{ lat: number; lng: number; formattedAddress: string } | null> => {
-  if (typeof window !== 'undefined' && (window as any).google?.maps?.places) {
-    return new Promise((resolve) => {
-      try {
-        const google = (window as any).google;
-        const dummyDiv = document.createElement('div');
-        const placesService = new google.maps.places.PlacesService(dummyDiv);
+  if (!placeId) return null;
 
-        const isNativeSessionToken =
-          sessionToken &&
-          google?.maps?.places?.AutocompleteSessionToken &&
-          sessionToken instanceof google.maps.places.AutocompleteSessionToken;
-
-        const detailsOptions: any = {
-          placeId,
-          fields: ['geometry', 'formatted_address', 'name'],
-        };
-
-        if (isNativeSessionToken) {
-          detailsOptions.sessionToken = sessionToken;
-        }
-
-        placesService.getDetails(
-          detailsOptions,
-          (result: any, status: any) => {
-            if (status === google.maps.places.PlacesServiceStatus.OK && result?.geometry?.location) {
-              resolve({
-                lat: result.geometry.location.lat(),
-                lng: result.geometry.location.lng(),
-                formattedAddress: result.formatted_address || result.name || '',
-              });
-            } else {
-              resolve(null);
-            }
-          }
-        );
-      } catch (err) {
-        console.warn('Erro getDetails PlacesService SDK:', err);
-        resolve(null);
-      }
-    });
-  }
-
-  // Fallback REST API
-  if (GOOGLE_KEY) {
+  // 1. Google Maps Places API (New) via JS SDK com Place.fetchFields
+  if (typeof window !== 'undefined' && (window as any).google?.maps?.places?.Place) {
     try {
-      const tokenParam = (typeof sessionToken === 'string' && sessionToken) ? `&sessiontoken=${sessionToken}` : '';
-      const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=geometry,formatted_address,name${tokenParam}&key=${GOOGLE_KEY}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data && data.status === 'OK' && data.result?.geometry?.location) {
+      const google = (window as any).google;
+      const isNativeSessionToken =
+        sessionToken &&
+        google?.maps?.places?.AutocompleteSessionToken &&
+        sessionToken instanceof google.maps.places.AutocompleteSessionToken;
+
+      const place = new google.maps.places.Place({ id: placeId });
+      await place.fetchFields({
+        fields: ['location', 'displayName', 'formattedAddress'],
+        sessionToken: isNativeSessionToken ? sessionToken : undefined,
+      });
+
+      const lat = typeof place.location?.lat === 'function' ? place.location.lat() : Number(place.location?.lat);
+      const lng = typeof place.location?.lng === 'function' ? place.location.lng() : Number(place.location?.lng);
+      const formattedAddress = place.formattedAddress || (typeof place.displayName === 'string' ? place.displayName : (place.displayName as any)?.text) || '';
+
+      if (!isNaN(lat) && !isNaN(lng)) {
         return {
-          lat: data.result.geometry.location.lat,
-          lng: data.result.geometry.location.lng,
-          formattedAddress: data.result.formatted_address || data.result.name,
+          lat,
+          lng,
+          formattedAddress,
         };
       }
     } catch (err) {
-      console.warn('Erro REST getPlaceDetails:', err);
+      console.warn('Erro Place.fetchFields (Places API New):', err);
+    }
+  }
+
+  // 2. Fallback Places API (New) via REST API v1
+  if (GOOGLE_KEY) {
+    try {
+      const url = `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?languageCode=pt-BR`;
+      const res = await fetch(url, {
+        headers: {
+          'X-Goog-Api-Key': GOOGLE_KEY,
+          'X-Goog-FieldMask': 'id,displayName,formattedAddress,location'
+        }
+      });
+      const data = await res.json();
+      if (data && data.location?.latitude && data.location?.longitude) {
+        return {
+          lat: data.location.latitude,
+          lng: data.location.longitude,
+          formattedAddress: data.formattedAddress || data.displayName?.text || '',
+        };
+      }
+    } catch (err) {
+      console.warn('Erro REST v1 places details:', err);
     }
   }
 
