@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'ubt-v3-prod';
+const CACHE_VERSION = 'ubt-v4-prod';
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();
@@ -30,7 +30,7 @@ self.addEventListener('fetch', (e) => {
     urlString.includes('functions/v1') ||
     urlString.includes('realtime') ||
     /realtime/i.test(urlString) ||
-    urlString.includes('manifest.json') ||
+    urlString.includes('manifest') ||
     urlString.includes('sw.js')
   ) {
     return;

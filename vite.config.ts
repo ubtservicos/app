@@ -30,7 +30,7 @@ function dynamicManifestPlugin(mode: string) {
     name: "dynamic-pwa-manifest",
     configureServer(server: any) {
       server.middlewares.use((req: any, res: any, next: any) => {
-        if (req.url && req.url.startsWith("/manifest.json")) {
+        if (req.url && (req.url.startsWith("/manifest-prod-v2.json") || req.url.startsWith("/manifest.json"))) {
           res.setHeader("Content-Type", "application/json");
           res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
           res.end(JSON.stringify(manifestData, null, 2));
@@ -40,6 +40,11 @@ function dynamicManifestPlugin(mode: string) {
       });
     },
     generateBundle(this: any) {
+      this.emitFile({
+        type: "asset",
+        fileName: "manifest-prod-v2.json",
+        source: JSON.stringify(manifestData, null, 2),
+      });
       this.emitFile({
         type: "asset",
         fileName: "manifest.json",

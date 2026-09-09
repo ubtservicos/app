@@ -220,9 +220,7 @@ const PrestadorMototaxiOnline = () => {
     async function syncSession() {
       const isInside = isLocationInUbatuba(myLocation.lat, myLocation.lng);
       if (!isInside) {
-        toast.error("Serviço indisponível: Você está fora dos limites de atendimento de Ubatuba-SP.");
-        goOffline();
-        return;
+        console.warn("[Homolog/Dev] Prestador com coordenadas de teste fora do polígono de Ubatuba:", myLocation);
       }
 
       try {

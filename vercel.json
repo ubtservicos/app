@@ -1,6 +1,15 @@
 {
   "headers": [
     {
+      "source": "/manifest-prod-v2.json",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
       "source": "/manifest.json",
       "headers": [
         {
@@ -29,6 +38,6 @@
     }
   ],
   "rewrites": [
-    { "source": "/((?!manifest\\.json|sw\\.js|assets/|favicon\\.ico).*)" , "destination": "/index.html" }
+    { "source": "/((?!manifest-prod-v2\\.json|manifest\\.json|sw\\.js|assets/|favicon\\.ico).*)" , "destination": "/index.html" }
   ]
 }
