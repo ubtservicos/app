@@ -518,13 +518,13 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
         console.error("[payment-gateway] Mercado Pago returned error:", mpStatus, mpData);
         return new Response(
           JSON.stringify({
-            error:             "Payment provider rejected the request.",
-            detail:            mpData.message ?? mpData.error ?? "Unknown MP error",
+            error:             mpData.message ?? mpData.error ?? "Payment provider rejected the request.",
+            details:           mpData.cause ?? mpData,
             mp_status:         mpData.status,
             mp_status_detail:  mpData.status_detail,
           }),
           {
-            status: mpStatus >= 400 ? mpStatus : 502,
+            status: 400,
             headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
           }
         );
@@ -642,7 +642,7 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
     });
 
     return new Response(
-      JSON.stringify({ error: "Internal server error. Incident logged." }),
+      JSON.stringify({ error: errorMessage || "Internal server error. Incident logged.", details: errorStack }),
       { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
     );
   }

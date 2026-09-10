@@ -627,10 +627,13 @@ const CompletedScreen = ({
   const handleConfirmPayment = async () => {
     setIsLoading(true);
     setPaymentError(null);
-    const finalAmount = feeCalc.totalAmount;
+    const finalAmount = Number(feeCalc.totalAmount.toFixed(2));
     try {
       const cardClean = cardNumber.replace(/\s+/g, "");
       const [expMonth, expYear] = cardExpiry.split("/");
+
+      const paymentMethodId = method === "pix" ? "pix" : (cardClean.startsWith("5") ? "master" : "visa");
+      const cardToken = method === "card" ? (cardClean ? `mock_token_${cardClean.slice(-4)}` : "mock_token_4242") : undefined;
 
       const { data, error } = await supabase.functions.invoke('payment-gateway', {
         body: {
@@ -645,18 +648,32 @@ const CompletedScreen = ({
           payer_first_name: (cardHolder || user?.name || "Felipe").split(" ")[0],
           payer_last_name: (cardHolder || user?.name || "Santander").split(" ").slice(1).join(" ") || "Santander",
           description: `Corrida UBT Mototáxi - ${formatBRL(finalAmount)} (Split 7 Vias)`,
-          payment_method_id: method === "pix" ? "pix" : "credit_card",
+          payment_method_id: paymentMethodId,
+          token: cardToken,
           card_data: method === "card" ? {
             number: cardClean,
-            cardholder_name: cardHolder,
+            cardholder_name: cardHolder || "Felipe Santander",
             expiration_month: expMonth ? parseInt(expMonth, 10) : 12,
             expiration_year: expYear ? (expYear.length === 2 ? 2000 + parseInt(expYear, 10) : parseInt(expYear, 10)) : 2028,
-            security_code: cardCvv,
+            security_code: cardCvv || "123",
           } : undefined
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        let detailedMsg = error.message;
+        try {
+          if ((error as any)?.context?.json) {
+            const jsonErr = (error as any).context.json;
+            detailedMsg = jsonErr.error || jsonErr.message || detailedMsg;
+            if (jsonErr.details) {
+              detailedMsg += ` (${typeof jsonErr.details === "string" ? jsonErr.details : JSON.stringify(jsonErr.details)})`;
+            }
+          }
+        } catch {}
+        throw new Error(detailedMsg);
+      }
+
       if (data?.split?.statement) {
         console.log("✅ [UBT Split Engine 7 Vias Extrato]:\n" + data.split.statement);
       }

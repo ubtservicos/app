@@ -55,14 +55,13 @@ const MototaxiMap = ({
   const [polyline, setPolyline] = useState<[number, number][]>([]);
 
   useEffect(() => {
-    if (!origin || !destination) {
-      setPolyline([]);
+    if (!origin || !destination || status === 'completed' || status === 'rating') {
       return;
     }
     getRouteInfo(origin, destination).then((info) => {
       if (info) setPolyline(info.polyline);
     });
-  }, [origin?.lat, origin?.lng, destination?.lat, destination?.lng]);
+  }, [origin?.lat, origin?.lng, destination?.lat, destination?.lng, status]);
 
   if (!origin && !prestadorLocation) {
     return <MapFallback status={status} center={center} />;

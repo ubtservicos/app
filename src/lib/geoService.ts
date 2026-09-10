@@ -570,50 +570,12 @@ export const getRouteInfo = async (
           };
         }
       } catch (routesErr) {
-        // Fallback to DirectionsService
-      }
-    }
-
-    // 2. Fallback para DirectionsService se Routes API não estiver inicializada
-    if (google.maps?.DirectionsService) {
-      try {
-        const directionsService = new google.maps.DirectionsService();
-        const result = await new Promise<any>((resolve, reject) => {
-          directionsService.route(
-            {
-              origin: { lat: Number(from.lat), lng: Number(from.lng) },
-              destination: { lat: Number(to.lat), lng: Number(to.lng) },
-              travelMode: google.maps.TravelMode.DRIVING,
-            },
-            (res: any, status: any) => {
-              if (status === google.maps.DirectionsStatus.OK && res) {
-                resolve(res);
-              } else {
-                reject(new Error(`Directions request failed: ${status}`));
-              }
-            }
-          );
-        });
-
-        if (result?.routes?.[0]?.legs?.[0]) {
-          const leg = result.routes[0].legs[0];
-          const distanceKm = +(leg.distance.value / 1000).toFixed(2);
-          const durationMin = Math.ceil(leg.duration.value / 60);
-
-          const polyline: [number, number][] = [];
-          result.routes[0].overview_path.forEach((p: any) => {
-            polyline.push([typeof p.lat === "function" ? p.lat() : Number(p.lat), typeof p.lng === "function" ? p.lng() : Number(p.lng)]);
-          });
-
-          return { distanceKm, durationMin, polyline };
-        }
-      } catch (sdkErr) {
-        // Fallback silencioso
+        // Fallback to mathematical calculation
       }
     }
   }
 
-  // 3. Fallback Matemático em Linha Reta se SDK não estiver disponível ou falhar
+  // 2. Fallback Matemático em Linha Reta se SDK não estiver disponível ou falhar
   const latDiff = Math.abs(from.lat - to.lat) * 111;
   const lngDiff = Math.abs(from.lng - to.lng) * 111 * Math.cos((from.lat * Math.PI) / 180);
   const approxDistance = +Math.sqrt(latDiff * latDiff + lngDiff * lngDiff).toFixed(2);
