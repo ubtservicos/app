@@ -92,21 +92,35 @@ const saveToPersistentCache = async (
   }
 };
 
-// Geocodificação Direta com Google Maps Geocoding API
+// Geocodificação Direta com Google Maps Geocoding SDK
 export const geocodeGoogle = async (query: string): Promise<{ lat: number; lng: number } | null> => {
-  if (!GOOGLE_KEY) return null;
-  try {
-    const encoded = encodeURIComponent(query + ', Ubatuba, SP, Brasil');
-    const boundsParam = `&bounds=${UBATUBA_BOUNDS.south},${UBATUBA_BOUNDS.west}|${UBATUBA_BOUNDS.north},${UBATUBA_BOUNDS.east}`;
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encoded}&key=${GOOGLE_KEY}&language=pt-BR&region=br${boundsParam}`;
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data && data.status === 'OK' && data.results && data.results.length > 0) {
-      const { lat, lng } = data.results[0].geometry.location;
-      return { lat, lng };
+  if (typeof window !== "undefined" && (window as any).google?.maps?.Geocoder) {
+    try {
+      const geocoder = new (window as any).google.maps.Geocoder();
+      const results = await new Promise<any[]>((resolve) => {
+        geocoder.geocode(
+          {
+            address: query + ", Ubatuba, SP, Brasil",
+            bounds: {
+              south: UBATUBA_BOUNDS.south,
+              west: UBATUBA_BOUNDS.west,
+              north: UBATUBA_BOUNDS.north,
+              east: UBATUBA_BOUNDS.east,
+            },
+          },
+          (res: any, status: string) => {
+            if (status === "OK" && res && res.length > 0) resolve(res);
+            else resolve([]);
+          }
+        );
+      });
+      if (results.length > 0 && results[0]?.geometry?.location) {
+        const loc = results[0].geometry.location;
+        return { lat: typeof loc.lat === "function" ? loc.lat() : Number(loc.lat), lng: typeof loc.lng === "function" ? loc.lng() : Number(loc.lng) };
+      }
+    } catch (err) {
+      console.warn("Google Geocode SDK error:", err);
     }
-  } catch (err) {
-    console.warn('Google Geocode error:', err);
   }
   return null;
 };
@@ -195,13 +209,22 @@ export const geocodeAddress = async (address: string): Promise<{ lat: number; ln
 export const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
   try {
     const startTime = Date.now();
-    // 1. Google Maps Reverse Geocode
-    if (GOOGLE_KEY) {
-      const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${GOOGLE_KEY}&language=pt-BR`);
-      const data = await res.json();
-      if (data && data.status === 'OK' && data.results && data.results.length > 0) {
-        logMetric('fallback_usage', `${lat},${lng}`, 'reverse_geocode', 'google', Date.now() - startTime);
-        return data.results[0].formatted_address;
+    // 1. Google Maps Reverse Geocode via SDK
+    if (typeof window !== "undefined" && (window as any).google?.maps?.Geocoder) {
+      try {
+        const geocoder = new (window as any).google.maps.Geocoder();
+        const results = await new Promise<any[]>((resolve) => {
+          geocoder.geocode({ location: { lat, lng } }, (res: any, status: string) => {
+            if (status === "OK" && res && res.length > 0) resolve(res);
+            else resolve([]);
+          });
+        });
+        if (results.length > 0 && results[0]?.formatted_address) {
+          logMetric('fallback_usage', `${lat},${lng}`, 'reverse_geocode', 'google', Date.now() - startTime);
+          return results[0].formatted_address;
+        }
+      } catch (sdkErr) {
+        console.warn('Google Reverse Geocode SDK error:', sdkErr);
       }
     }
 
@@ -544,33 +567,11 @@ export const getRouteInfo = async (
         return { distanceKm, durationMin, polyline };
       }
     } catch (sdkErr) {
-      console.warn('Erro DirectionsService JS SDK, tentando REST fallback:', sdkErr);
+      console.warn('Erro DirectionsService JS SDK:', sdkErr);
     }
   }
 
-  // 2. Fallback REST API Google Directions
-  if (GOOGLE_KEY) {
-    try {
-      const originStr = `${from.lat},${from.lng}`;
-      const destStr = `${to.lat},${to.lng}`;
-      const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${originStr}&destination=${destStr}&mode=driving&key=${GOOGLE_KEY}&language=pt-BR`;
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data && data.status === 'OK' && data.routes?.length > 0) {
-        const route = data.routes[0];
-        const leg = route.legs[0];
-        const distanceKm = +(leg.distance.value / 1000).toFixed(2);
-        const durationMin = Math.ceil(leg.duration.value / 60);
-        const polyline = decodeGooglePolyline(route.overview_polyline.points);
-
-        return { distanceKm, durationMin, polyline };
-      }
-    } catch (restErr) {
-      console.warn('Erro REST Google Directions:', restErr);
-    }
-  }
-
-  // 3. Fallback Matemático em Linha Reta se offline
+  // 2. Fallback Matemático em Linha Reta se SDK não estiver disponível ou falhar
   const latDiff = Math.abs(from.lat - to.lat) * 111;
   const lngDiff = Math.abs(from.lng - to.lng) * 111 * Math.cos((from.lat * Math.PI) / 180);
   const approxDistance = +Math.sqrt(latDiff * latDiff + lngDiff * lngDiff).toFixed(2);

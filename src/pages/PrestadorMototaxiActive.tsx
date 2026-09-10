@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Navigation, MapPin, CheckCircle2, Star,
+  Navigation, MapPin, CheckCircle2, Star, MessageSquare,
   User as UserIcon, Building2, Users, Gift, Heart,
 } from "lucide-react";
 import PrestadorMapLight from "@/components/prestador/PrestadorMapLight";
@@ -58,6 +58,7 @@ const PrestadorMototaxiActive = () => {
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [lastSentPhrase, setLastSentPhrase] = useState<string | null>(null);
+  const [incomingMessage, setIncomingMessage] = useState<{ text: string; sender: string } | null>(null);
   const msgChannelRef = useRef<any>(null);
 
   useEffect(() => {
@@ -66,6 +67,12 @@ const PrestadorMototaxiActive = () => {
     channel
       .on('broadcast', { event: 'quick_message' }, ({ payload }) => {
         console.log('Mensagem rápida recebida pelo prestador:', payload);
+        if (payload?.text && payload?.from === 'tomador') {
+          setIncomingMessage({
+            text: payload.text,
+            sender: 'Passageiro(a)',
+          });
+        }
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
@@ -78,6 +85,13 @@ const PrestadorMototaxiActive = () => {
       msgChannelRef.current = null;
     };
   }, [ride?.id]);
+
+  useEffect(() => {
+    if (incomingMessage) {
+      const timer = setTimeout(() => setIncomingMessage(null), 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [incomingMessage]);
 
   const handleSendQuickMessage = async (text: string) => {
     setLastSentPhrase(text);
@@ -431,6 +445,34 @@ const PrestadorMototaxiActive = () => {
 
   return (
     <div className="relative min-h-[100svh] text-zinc-100" style={{ background: "var(--prestador-bg)" }}>
+      {/* Floating incoming quick message banner */}
+      {incomingMessage && (
+        <div
+          className="fixed top-4 left-4 right-4 z-[1200] max-w-md mx-auto p-3.5 rounded-2xl bg-zinc-900/95 border border-[#0DB87E] shadow-2xl backdrop-blur-md flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-4 duration-300"
+          onClick={() => setIncomingMessage(null)}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-[#0DB87E]/20 border border-[#0DB87E]/40 flex items-center justify-center shrink-0">
+              <MessageSquare size={18} className="text-[#0DB87E]" />
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold text-[#0DB87E] uppercase tracking-wider">{incomingMessage.sender}</p>
+              <p className="text-[13px] font-medium text-white">{incomingMessage.text}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIncomingMessage(null);
+            }}
+            className="text-zinc-400 hover:text-white text-xs px-2 py-1 rounded"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       <div className="absolute inset-0">
         <PrestadorMapLight
           myLocation={myLocation}

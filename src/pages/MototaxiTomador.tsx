@@ -16,6 +16,7 @@ import {
   CreditCard,
   X,
   User,
+  MessageSquare,
 } from "lucide-react";
 import MototaxiMap from "@/components/mototaxi/MototaxiMap";
 import SplitBreakdown from "@/components/mototaxi/SplitBreakdown";
@@ -993,6 +994,7 @@ const MototaxiTomadorPage = () => {
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [paymentStep, setPaymentStep] = useState<string>("");
   const [prefData, setPrefData] = useState<any>(null);
+  const [incomingMessage, setIncomingMessage] = useState<{ text: string; sender: string } | null>(null);
   const initOnce = useRef(false);
   const msgChannelRef = useRef<any>(null);
 
@@ -1006,6 +1008,12 @@ const MototaxiTomadorPage = () => {
             ...prev,
             messages: [...(prev.messages || []), payload]
           }));
+          if (payload?.text) {
+            setIncomingMessage({
+              text: payload.text,
+              sender: 'Motorista',
+            });
+          }
         }
       })
       .subscribe((status) => {
@@ -1019,6 +1027,13 @@ const MototaxiTomadorPage = () => {
       msgChannelRef.current = null;
     };
   }, [state.rideId]);
+
+  useEffect(() => {
+    if (incomingMessage) {
+      const timer = setTimeout(() => setIncomingMessage(null), 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [incomingMessage]);
 
   // Monitor ride state transitions to "completed" to trigger the Mercado Pago Split simulated flow
   useEffect(() => {
@@ -1593,6 +1608,34 @@ const MototaxiTomadorPage = () => {
 
   return (
     <div className="relative w-full h-[100svh] overflow-hidden bg-navy">
+      {/* Floating incoming quick message banner */}
+      {incomingMessage && (
+        <div
+          className="fixed top-4 left-4 right-4 z-[1200] max-w-md mx-auto p-3.5 rounded-2xl bg-zinc-900/95 border border-[#0DB87E] shadow-2xl backdrop-blur-md flex items-center justify-between gap-3 animate-in fade-in slide-in-from-top-4 duration-300"
+          onClick={() => setIncomingMessage(null)}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-[#0DB87E]/20 border border-[#0DB87E]/40 flex items-center justify-center shrink-0">
+              <MessageSquare size={18} className="text-[#0DB87E]" />
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold text-[#0DB87E] uppercase tracking-wider">{incomingMessage.sender}</p>
+              <p className="text-[13px] font-medium text-white">{incomingMessage.text}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIncomingMessage(null);
+            }}
+            className="text-zinc-400 hover:text-white text-xs px-2 py-1 rounded"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       <MototaxiMap
         origin={state.origin}
         destination={state.destination}
@@ -1650,11 +1693,11 @@ const MototaxiTomadorPage = () => {
         />
       )}
 
-      {state.status === "accepted" && state.prestadorInfo && state.acceptedAt && (
+      {state.status === "accepted" && state.prestadorInfo && (
         <AcceptedSheet
           prestador={state.prestadorInfo}
           durationMin={state.durationMin}
-          acceptedAt={state.acceptedAt}
+          acceptedAt={state.acceptedAt || Date.now()}
           onCancel={handleCancel}
           onArrive={handleArrive}
           onSendMessage={sendMessage}

@@ -59,5 +59,6 @@ export const SPLIT_META: Array<{
   { key: "premioConsumidor", label: "Prêmio Consumidor (0,5%)", icon: "Star", color: "#E84040" },
 ];
 
-export const formatBRL = (v: number) =>
-  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+export const formatBRL = (v?: number | null) =>
+  (Number(v) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
