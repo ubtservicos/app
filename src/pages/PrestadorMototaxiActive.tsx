@@ -59,6 +59,7 @@ const PrestadorMototaxiActive = () => {
   const [comment, setComment] = useState("");
   const [lastSentPhrase, setLastSentPhrase] = useState<string | null>(null);
   const [incomingMessage, setIncomingMessage] = useState<{ text: string; sender: string } | null>(null);
+  const [isPaymentConfirmed, setIsPaymentConfirmed] = useState(false);
   const msgChannelRef = useRef<any>(null);
 
   useEffect(() => {
@@ -122,14 +123,14 @@ const PrestadorMototaxiActive = () => {
   };
 
   useEffect(() => {
-    if (phase === "completed") {
+    if (phase === "completed" && isPaymentConfirmed) {
       const timer = setTimeout(() => {
         sessionStorage.removeItem("ubt_active_ride");
         navigate("/app/prestador/home");
-      }, 3500);
+      }, 5000);
       return () => clearTimeout(timer);
     }
-  }, [phase, navigate]);
+  }, [phase, isPaymentConfirmed, navigate]);
 
   // Carregar dados da corrida do banco
   useEffect(() => {
@@ -157,6 +158,9 @@ const PrestadorMototaxiActive = () => {
           setPhase("in_progress");
         } else if (data.status === 'completed') {
           setPhase("completed");
+        } else if (data.status === 'paid') {
+          setPhase("completed");
+          setIsPaymentConfirmed(true);
         }
       }
     };
@@ -298,10 +302,14 @@ const PrestadorMototaxiActive = () => {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'mototaxi_corridas', filter: `id=eq.${ride.id}` },
         (payload: any) => {
-          if (payload.new && payload.new.status === 'cancelled') {
-            alert('A corrida foi cancelada pelo passageiro.');
-            sessionStorage.removeItem("ubt_active_ride");
-            navigate("/app/prestador/home");
+          if (payload.new) {
+            if (payload.new.status === 'cancelled') {
+              alert('A corrida foi cancelada pelo passageiro.');
+              sessionStorage.removeItem("ubt_active_ride");
+              navigate("/app/prestador/home");
+            } else if (payload.new.status === 'paid') {
+              setIsPaymentConfirmed(true);
+            }
           }
         }
       )
@@ -356,12 +364,18 @@ const PrestadorMototaxiActive = () => {
         className="min-h-[100svh] overflow-y-auto text-zinc-100 relative overflow-hidden"
         style={{ background: "var(--prestador-bg)", padding: 24, paddingBottom: 96 }}
       >
-        <Confetti numberOfPieces={250} recycle={false} />
+        {isPaymentConfirmed && <Confetti numberOfPieces={250} recycle={false} />}
         <div className="text-center pt-4">
           <CheckCircle2 size={48} color="#0DB87E" className="mx-auto" />
           <h1 className="mt-3 font-display text-[22px] font-bold text-white">
-            Serviço concluído!
+            {isPaymentConfirmed ? "Corrida Paga e Concluída!" : "Serviço finalizado!"}
           </h1>
+          {!isPaymentConfirmed && (
+            <p className="mt-1 font-sans text-[13px] text-[#F5A623] flex items-center justify-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-[#F5A623] animate-pulse" />
+              Aguardando confirmação de pagamento do passageiro...
+            </p>
+          )}
         </div>
 
         <div

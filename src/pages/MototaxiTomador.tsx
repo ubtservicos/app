@@ -571,6 +571,7 @@ const CompletedScreen = ({
   const [pixSeconds, setPixSeconds] = useState(300);
   const [isLoading, setIsLoading] = useState(false);
   const [qrCodeBase64, setQrCodeBase64] = useState<string>("");
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   const [feeSettings, setFeeSettings] = useState<GatewayFeeSettings>(DEFAULT_FEE_SETTINGS);
 
   useEffect(() => {
@@ -625,6 +626,7 @@ const CompletedScreen = ({
 
   const handleConfirmPayment = async () => {
     setIsLoading(true);
+    setPaymentError(null);
     const finalAmount = feeCalc.totalAmount;
     try {
       const cardClean = cardNumber.replace(/\s+/g, "");
@@ -653,6 +655,7 @@ const CompletedScreen = ({
           } : undefined
         }
       });
+
       if (error) throw error;
       if (data?.split?.statement) {
         console.log("✅ [UBT Split Engine 7 Vias Extrato]:\n" + data.split.statement);
@@ -660,14 +663,24 @@ const CompletedScreen = ({
       if (data?.pix?.qr_code_base64) {
         setQrCodeBase64(data.pix.qr_code_base64);
       } else {
+        if (rideId) {
+          try {
+            await supabase
+              .from('mototaxi_corridas')
+              .update({ status: 'paid', updated_at: new Date().toISOString() })
+              .eq('id', rideId);
+          } catch (e) {
+            console.warn("Aviso ao atualizar status para paid:", e);
+          }
+        }
         setConfirming(true);
         setTimeout(onPay, 1500);
       }
-    } catch (err) {
-      console.error("Payment failed", err);
-      // Fallback
-      setConfirming(true);
-      setTimeout(onPay, 1500);
+    } catch (err: any) {
+      console.error("Payment failed:", err);
+      const msg = err?.message || err?.error || "Erro no processamento do pagamento pelo gateway.";
+      setPaymentError(msg);
+      toast.error(`Falha no pagamento: ${msg}`);
     } finally {
       setIsLoading(false);
     }
@@ -840,6 +853,19 @@ const CompletedScreen = ({
               />
             </div>
           </div>
+        </div>
+      )}
+
+      {paymentError && (
+        <div className="mt-4 p-3.5 rounded-xl bg-red-500/15 border border-red-500/40 text-red-300 text-xs font-medium flex items-center justify-between gap-2">
+          <span>⚠️ {paymentError}</span>
+          <button
+            type="button"
+            onClick={() => setPaymentError(null)}
+            className="text-red-400 hover:text-white text-xs px-1"
+          >
+            ✕
+          </button>
         </div>
       )}
 

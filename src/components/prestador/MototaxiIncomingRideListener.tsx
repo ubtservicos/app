@@ -20,11 +20,16 @@ export interface Chamado {
 export const playChamadoSound = () => {
   try {
     if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-      (navigator as Navigator).vibrate?.([300, 150, 300, 150, 300]);
+      try {
+        (navigator as Navigator).vibrate?.([300, 150, 300, 150, 300]);
+      } catch {}
     }
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     if (AudioContextClass) {
       const audioCtx = new AudioContextClass();
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume().catch(() => {});
+      }
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
       osc.type = "sine";
@@ -35,12 +40,12 @@ export const playChamadoSound = () => {
       gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
       osc.connect(gain);
       gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.6);
+      try {
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.6);
+      } catch {}
     }
-  } catch (e) {
-    // audio play blocked or unsupported
-  }
+  } catch {}
 };
 
 export const ChamadoModal = ({

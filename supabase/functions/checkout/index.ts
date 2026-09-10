@@ -105,7 +105,7 @@ serve(async (req: Request): Promise<Response> => {
           await supabaseAdmin
             .from("mototaxi_corridas")
             .update({
-              status: "completed",
+              status: "paid",
               final_price: numAmount,
               updated_at: new Date().toISOString(),
             })

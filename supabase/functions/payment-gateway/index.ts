@@ -6,8 +6,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // ============================================================
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, Authorization, Content-Type, Accept",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, Authorization, Content-Type, Accept, X-Requested-With",
 };
 
 // ============================================================
@@ -334,7 +334,7 @@ async function createMercadoPagoPayment({
 // MAIN HANDLER
 // ============================================================
 serve(async (req: Request): Promise<Response> => {
-  // Handle CORS Preflight
+  // 1. Intercept OPTIONS preflight immediately (first instruction)
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 200, headers: CORS_HEADERS });
   }
@@ -349,71 +349,56 @@ serve(async (req: Request): Promise<Response> => {
 
   // ---- Central try/catch — all errors MUST be caught and logged ----
   try {
-    let body;
+    let body: any;
     try {
       body = await req.json();
     } catch (parseErr) {
+      console.error("[payment-gateway] Failed to parse JSON body:", parseErr);
       return new Response(
         JSON.stringify({ error: "Invalid JSON body in request." }),
         { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
       );
     }
-  const { action } = body;
+
+    const action = body.action || "create_payment_intent";
+    console.log(`[payment-gateway] Handling action="${action}", body:`, JSON.stringify(body));
 
     // ----------------------------------------------------------------
-    // ROUTE: PIX Payment Intent (with Split)
+    // ROUTE: Payment Intent / Checkout (with Split)
     // ----------------------------------------------------------------
-    if (action === "create_payment_intent") {
-      const {
-        transaction_amount,
-        description,
-        payer_email,
-        payer_first_name,
-        payer_last_name,
-        service_type,
-        service_id,
-        external_reference,
-        entity_id,
-        godparent_id,
-        godparent_tomador_id,
-        godparent_prestador_id,
-        provider_id,
-        provider_name,
-        metadata,
-        payment_method_id = "pix",
-        token: cardToken,
-        installments = 1,
-      } = body;
+    if (action === "create_payment_intent" || action === "checkout") {
+      const transaction_amount = Number(body.transaction_amount ?? body.amount ?? 0);
+      const rawServiceType = String(body.service_type || "mototaxi").toLowerCase().trim();
+      const service_type = (["mototaxi", "diarista", "ambulante"].includes(rawServiceType) ? rawServiceType : "mototaxi") as ServiceType;
+      const service_id = String(body.service_id || body.ride_id || body.order_id || crypto.randomUUID());
+      const description = String(body.description || `Serviço UBT ${service_type} - R$ ${transaction_amount.toFixed(2)}`);
+      const payer_email = String(body.payer_email || body.email || "contato@ubt.app").trim();
+      const payer_first_name = String(body.payer_first_name || (body.card_holder || "Cliente").split(" ")[0]);
+      const payer_last_name = String(body.payer_last_name || (body.card_holder || "UBT").split(" ").slice(1).join(" ") || "UBT");
+      const payment_method_id = String(body.payment_method_id || body.payment_method || "pix").toLowerCase().trim();
+      const external_reference = body.external_reference || body.service_id || service_id;
+      const entity_id = body.entity_id;
+      const godparent_id = body.godparent_id;
+      const godparent_tomador_id = body.godparent_tomador_id;
+      const godparent_prestador_id = body.godparent_prestador_id;
+      const provider_id = body.provider_id || "0a5edf64-7585-401f-b310-126529607da0";
+      const provider_name = body.provider_name || "Silvina Luz";
+      const metadata = body.metadata || {};
+      const cardToken = body.token || body.card_token;
+      const installments = Number(body.installments) || 1;
 
       // 1. Basic Validations
-      if (!transaction_amount || typeof transaction_amount !== "number" || transaction_amount <= 0) {
+      if (isNaN(transaction_amount) || transaction_amount <= 0) {
+        console.error("[payment-gateway] 400: Invalid transaction_amount:", body.transaction_amount, body.amount);
         return new Response(
-          JSON.stringify({ error: "Invalid transaction_amount. Must be a positive number." }),
+          JSON.stringify({ error: "Invalid transaction_amount. Must be a positive number.", received: body.transaction_amount }),
           { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
         );
       }
-      if (!description || typeof description !== "string") {
+      if (!payer_email.includes("@")) {
+        console.error("[payment-gateway] 400: Invalid payer_email:", payer_email);
         return new Response(
-          JSON.stringify({ error: "Missing or invalid description." }),
-          { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
-        );
-      }
-      if (!payer_email || typeof payer_email !== "string" || !payer_email.includes("@")) {
-        return new Response(
-          JSON.stringify({ error: "Missing or invalid payer_email." }),
-          { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
-        );
-      }
-      if (!service_id || typeof service_id !== "string") {
-        return new Response(
-          JSON.stringify({ error: "Missing service_id. Required to link payment to service record." }),
-          { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
-        );
-      }
-      const validServiceTypes: ServiceType[] = ["mototaxi", "diarista", "ambulante"];
-      if (!validServiceTypes.includes(service_type)) {
-        return new Response(
-          JSON.stringify({ error: `Invalid service_type. Must be one of: ${validServiceTypes.join(", ")}.` }),
+          JSON.stringify({ error: "Missing or invalid payer_email.", received: payer_email }),
           { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
         );
       }
@@ -425,8 +410,8 @@ serve(async (req: Request): Promise<Response> => {
       const split = calculateSplitAmounts(transaction_amount, splitConfig);
 
       // --- [2.1] Resolve 7 nominal destinations ---
-      const resolvedProviderId = provider_id || "0a5edf64-7585-401f-b310-126529607da0"; // Silvina Luz
-      const resolvedProviderName = provider_name || "Silvina Luz (Mototaxista)";
+      const resolvedProviderId = provider_id;
+      const resolvedProviderName = provider_name;
       const resolvedAssocName = entity_id ? `Associação (${entity_id})` : "caixinha-mototaxista-sem-associação";
       const resolvedGodparentPrestador = godparent_prestador_id || "ubt-fundo-reserva-prestador";
       const resolvedGodparentTomador = godparent_tomador_id || godparent_id || "ubt-fundo-reserva-tomador";
@@ -583,6 +568,23 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
           },
         });
         console.log(`[payment-gateway] ✅ Split record created for transaction_id=${transactionId}`);
+      }
+
+      // --- [7.1] Update mototaxi_corridas status to paid if applicable ---
+      if (service_type === "mototaxi" && service_id) {
+        try {
+          await supabaseAdmin
+            .from("mototaxi_corridas")
+            .update({
+              status: "paid",
+              final_price: transaction_amount,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", service_id);
+          console.log(`[payment-gateway] ✅ mototaxi_corridas id=${service_id} updated to status=paid`);
+        } catch (corridaErr) {
+          console.error("[payment-gateway] Error updating mototaxi_corridas:", corridaErr);
+        }
       }
 
       // --- [8] Return structured PIX data ---

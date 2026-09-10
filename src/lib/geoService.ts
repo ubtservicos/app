@@ -524,54 +524,96 @@ export function decodeGooglePolyline(encoded: string): [number, number][] {
   return points;
 }
 
-// CALCULAR DISTÂNCIA E ROTA COM GOOGLE MAPS DIRECTIONS SERVICE
+// CALCULAR DISTÂNCIA E ROTA COM GOOGLE MAPS ROUTES API (computeRoutes)
 export const getRouteInfo = async (
   from: { lat: number; lng: number },
   to: { lat: number; lng: number }
 ): Promise<{ distanceKm: number; durationMin: number; polyline: [number, number][] } | null> => {
   if (!from || !to) return null;
 
-  // 1. Tentar via JS SDK DirectionsService se disponível
-  if (typeof window !== 'undefined' && (window as any).google?.maps?.DirectionsService) {
-    try {
-      const google = (window as any).google;
-      const directionsService = new google.maps.DirectionsService();
+  // 1. Tentar via Routes API moderna (google.maps.routes.Route.computeRoutes)
+  if (typeof window !== "undefined" && (window as any).google?.maps) {
+    const google = (window as any).google;
 
-      const result = await new Promise<any>((resolve, reject) => {
-        directionsService.route(
-          {
-            origin: { lat: Number(from.lat), lng: Number(from.lng) },
-            destination: { lat: Number(to.lat), lng: Number(to.lng) },
-            travelMode: google.maps.TravelMode.DRIVING,
+    if (google.maps?.routes?.Route?.computeRoutes) {
+      try {
+        const response = await google.maps.routes.Route.computeRoutes({
+          origin: {
+            location: {
+              latLng: { latitude: Number(from.lat), longitude: Number(from.lng) },
+            },
           },
-          (res: any, status: any) => {
-            if (status === google.maps.DirectionsStatus.OK && res) {
-              resolve(res);
-            } else {
-              reject(new Error(`Directions request failed: ${status}`));
-            }
-          }
-        );
-      });
-
-      if (result?.routes?.[0]?.legs?.[0]) {
-        const leg = result.routes[0].legs[0];
-        const distanceKm = +(leg.distance.value / 1000).toFixed(2);
-        const durationMin = Math.ceil(leg.duration.value / 60);
-
-        const polyline: [number, number][] = [];
-        result.routes[0].overview_path.forEach((p: any) => {
-          polyline.push([p.lat(), p.lng()]);
+          destination: {
+            location: {
+              latLng: { latitude: Number(to.lat), longitude: Number(to.lng) },
+            },
+          },
+          travelMode: "DRIVE",
+          routingPreference: "TRAFFIC_UNAWARE",
         });
 
-        return { distanceKm, durationMin, polyline };
+        if (response?.routes?.[0]) {
+          const r = response.routes[0];
+          const leg = r.legs?.[0];
+          const distanceMeters = r.distanceMeters || leg?.distanceMeters || 0;
+          const durationSeconds = parseInt(String(r.duration || leg?.duration || "0").replace("s", ""), 10) || 0;
+          const distanceKm = +(distanceMeters / 1000).toFixed(2);
+          const durationMin = Math.ceil(durationSeconds / 60) || 2;
+          let polyline: [number, number][] = [];
+          if (r.polyline?.encodedPolyline) {
+            polyline = decodeGooglePolyline(r.polyline.encodedPolyline);
+          }
+          return {
+            distanceKm: Math.max(0.5, distanceKm),
+            durationMin: Math.max(2, durationMin),
+            polyline: polyline.length > 0 ? polyline : [[from.lat, from.lng], [to.lat, to.lng]],
+          };
+        }
+      } catch (routesErr) {
+        // Fallback to DirectionsService
       }
-    } catch (sdkErr) {
-      console.warn('Erro DirectionsService JS SDK:', sdkErr);
+    }
+
+    // 2. Fallback para DirectionsService se Routes API não estiver inicializada
+    if (google.maps?.DirectionsService) {
+      try {
+        const directionsService = new google.maps.DirectionsService();
+        const result = await new Promise<any>((resolve, reject) => {
+          directionsService.route(
+            {
+              origin: { lat: Number(from.lat), lng: Number(from.lng) },
+              destination: { lat: Number(to.lat), lng: Number(to.lng) },
+              travelMode: google.maps.TravelMode.DRIVING,
+            },
+            (res: any, status: any) => {
+              if (status === google.maps.DirectionsStatus.OK && res) {
+                resolve(res);
+              } else {
+                reject(new Error(`Directions request failed: ${status}`));
+              }
+            }
+          );
+        });
+
+        if (result?.routes?.[0]?.legs?.[0]) {
+          const leg = result.routes[0].legs[0];
+          const distanceKm = +(leg.distance.value / 1000).toFixed(2);
+          const durationMin = Math.ceil(leg.duration.value / 60);
+
+          const polyline: [number, number][] = [];
+          result.routes[0].overview_path.forEach((p: any) => {
+            polyline.push([typeof p.lat === "function" ? p.lat() : Number(p.lat), typeof p.lng === "function" ? p.lng() : Number(p.lng)]);
+          });
+
+          return { distanceKm, durationMin, polyline };
+        }
+      } catch (sdkErr) {
+        // Fallback silencioso
+      }
     }
   }
 
-  // 2. Fallback Matemático em Linha Reta se SDK não estiver disponível ou falhar
+  // 3. Fallback Matemático em Linha Reta se SDK não estiver disponível ou falhar
   const latDiff = Math.abs(from.lat - to.lat) * 111;
   const lngDiff = Math.abs(from.lng - to.lng) * 111 * Math.cos((from.lat * Math.PI) / 180);
   const approxDistance = +Math.sqrt(latDiff * latDiff + lngDiff * lngDiff).toFixed(2);

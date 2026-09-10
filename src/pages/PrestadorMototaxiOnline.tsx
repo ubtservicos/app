@@ -52,14 +52,19 @@ const Sheet = ({ children }: { children: React.ReactNode }) => (
 const playChamadoSound = () => {
   try {
     if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-      (navigator as Navigator).vibrate?.([300, 150, 300, 150, 300]);
+      try {
+        (navigator as Navigator).vibrate?.([300, 150, 300, 150, 300]);
+      } catch {}
     }
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     if (AudioContextClass) {
       const audioCtx = new AudioContextClass();
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume().catch(() => {});
+      }
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
-      osc.type = 'sine';
+      osc.type = "sine";
       osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
       osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.15); // A5
       osc.frequency.setValueAtTime(1174.66, audioCtx.currentTime + 0.3); // D6
@@ -67,12 +72,12 @@ const playChamadoSound = () => {
       gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
       osc.connect(gain);
       gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.6);
+      try {
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.6);
+      } catch {}
     }
-  } catch (e) {
-    // ignore audio block
-  }
+  } catch {}
 };
 
 const ChamadoModal = ({
