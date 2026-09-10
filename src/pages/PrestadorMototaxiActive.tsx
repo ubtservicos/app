@@ -3,7 +3,9 @@ import { useNavigate } from "react-router-dom";
 import {
   Navigation, MapPin, CheckCircle2, Star, MessageSquare,
   User as UserIcon, Building2, Users, Gift, Heart,
+  Scan, Smartphone, CreditCard, Banknote, Copy, Check, QrCode,
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import PrestadorMapLight from "@/components/prestador/PrestadorMapLight";
 import PrimaryButtonLight from "@/components/prestador/PrimaryButtonLight";
 import Confetti from "react-confetti";
@@ -32,6 +34,7 @@ interface ActiveRide {
   passengerName?: string;
   originCoords?: { lat: number; lng: number };
   destinationCoords?: { lat: number; lng: number };
+  paymentMethod?: string;
 }
 
 const Sheet = ({ children }: { children: React.ReactNode }) => (
@@ -60,6 +63,9 @@ const PrestadorMototaxiActive = () => {
   const [lastSentPhrase, setLastSentPhrase] = useState<string | null>(null);
   const [incomingMessage, setIncomingMessage] = useState<{ text: string; sender: string } | null>(null);
   const [isPaymentConfirmed, setIsPaymentConfirmed] = useState(false);
+  const [paymentMethodSelected, setPaymentMethodSelected] = useState<string | null>(null);
+  const [copiedPix, setCopiedPix] = useState(false);
+  const [isConfirmingCash, setIsConfirmingCash] = useState(false);
   const msgChannelRef = useRef<any>(null);
 
   useEffect(() => {
@@ -73,6 +79,12 @@ const PrestadorMototaxiActive = () => {
             text: payload.text,
             sender: 'Passageiro(a)',
           });
+        }
+      })
+      .on('broadcast', { event: 'payment_method_selected' }, ({ payload }) => {
+        console.log('Método de pagamento selecionado pelo passageiro:', payload);
+        if (payload?.method) {
+          setPaymentMethodSelected(payload.method);
         }
       })
       .subscribe((status) => {
@@ -152,8 +164,12 @@ const PrestadorMototaxiActive = () => {
           durationMin: data.duration_min,
           price: Number(data.estimated_price),
           originCoords: { lat: Number(originObj.lat), lng: Number(originObj.lng) },
-          destinationCoords: { lat: Number(destObj.lat), lng: Number(destObj.lng) }
+          destinationCoords: { lat: Number(destObj.lat), lng: Number(destObj.lng) },
+          paymentMethod: data.payment_method,
         });
+        if (data.payment_method) {
+          setPaymentMethodSelected(data.payment_method);
+        }
         if (data.status === 'in_progress') {
           setPhase("in_progress");
         } else if (data.status === 'completed') {
@@ -310,6 +326,9 @@ const PrestadorMototaxiActive = () => {
             } else if (payload.new.status === 'paid') {
               setIsPaymentConfirmed(true);
             }
+            if (payload.new.payment_method) {
+              setPaymentMethodSelected(payload.new.payment_method);
+            }
           }
         }
       )
@@ -350,6 +369,24 @@ const PrestadorMototaxiActive = () => {
     }
   };
 
+  const handleConfirmCashOrManualPaid = async () => {
+    if (!ride?.id) return;
+    setIsConfirmingCash(true);
+    try {
+      const { error } = await supabase
+        .from('mototaxi_corridas')
+        .update({ status: 'paid', updated_at: new Date().toISOString() })
+        .eq('id', ride.id);
+      if (error) throw error;
+      setIsPaymentConfirmed(true);
+    } catch (e) {
+      console.error("Erro ao confirmar pagamento manual/dinheiro:", e);
+      alert("Erro ao confirmar recebimento.");
+    } finally {
+      setIsConfirmingCash(false);
+    }
+  };
+
   const finalize = () => {
     sessionStorage.removeItem("ubt_active_ride");
     navigate("/app/prestador/home");
@@ -357,8 +394,10 @@ const PrestadorMototaxiActive = () => {
 
   /* ---------------- COMPLETED ---------------- */
   if (phase === "completed") {
-    const youReceive = ride.price * 0.9;
-    const split = calcSplit(ride.price);
+    const youReceive = (ride.price || 0) * 0.9;
+    const split = calcSplit(ride.price || 0);
+    const pixPayload = `00020126580014BR.GOV.BCB.PIX0136ubt.pagamentos@ubatuba.sp.gov.br520400005303986540${(ride.price || 0).toFixed(2)}5802BR5913UBT SERVICOS6007UBATUBA62070503***6304`;
+
     return (
       <div
         className="min-h-[100svh] overflow-y-auto text-zinc-100 relative overflow-hidden"
@@ -373,10 +412,116 @@ const PrestadorMototaxiActive = () => {
           {!isPaymentConfirmed && (
             <p className="mt-1 font-sans text-[13px] text-[#F5A623] flex items-center justify-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-[#F5A623] animate-pulse" />
-              Aguardando confirmação de pagamento do passageiro...
+              Aguardando pagamento do passageiro...
             </p>
           )}
         </div>
+
+        {/* PAYMENT METHOD ACTIVE DISPLAY ON PRESTADOR */}
+        {!isPaymentConfirmed && (
+          <div className="mt-4">
+            {paymentMethodSelected === "pix_scanner" && (
+              <div className="rounded-2xl p-5 bg-zinc-900/90 border border-[#0DB87E]/40 text-center flex flex-col items-center shadow-xl">
+                <div className="w-12 h-12 rounded-full bg-[#0DB87E]/20 flex items-center justify-center mb-2">
+                  <Scan size={24} className="text-[#0DB87E]" />
+                </div>
+                <h2 className="font-display text-[16px] font-bold text-white">Pix Scanner Solicitado</h2>
+                <p className="font-sans text-[12px] text-white/70 mt-1 mb-3">
+                  Apresente este QR Code para o passageiro ler no aplicativo do banco dele:
+                </p>
+                <div className="bg-white p-3.5 rounded-2xl shadow-2xl">
+                  <QRCodeSVG value={pixPayload} size={180} level="M" />
+                </div>
+                <p className="mt-3 font-display text-[20px] font-bold text-[#0DB87E]">
+                  {formatBRL(ride.price || 0)}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(pixPayload);
+                    setCopiedPix(true);
+                    setTimeout(() => setCopiedPix(false), 3000);
+                  }}
+                  className="mt-3 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-white font-sans text-[12px] flex items-center gap-2 active:scale-95 transition-all"
+                >
+                  {copiedPix ? <Check size={14} className="text-[#0DB87E]" /> : <Copy size={14} />}
+                  {copiedPix ? "Código Pix Copiado!" : "Copiar Chave Copia e Cola"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmCashOrManualPaid}
+                  className="mt-4 w-full h-11 rounded-xl bg-[#0DB87E] font-display font-semibold text-white active:scale-98 transition-all"
+                >
+                  Confirmar que o Pix foi Pago
+                </button>
+              </div>
+            )}
+
+            {paymentMethodSelected === "cash" && (
+              <div className="rounded-2xl p-5 bg-amber-500/10 border border-amber-500/30 text-center shadow-xl">
+                <div className="w-12 h-12 mx-auto rounded-full bg-amber-500/20 flex items-center justify-center mb-2">
+                  <Banknote size={24} className="text-[#F5A623]" />
+                </div>
+                <h2 className="font-display text-[16px] font-bold text-white">Pagamento em Dinheiro</h2>
+                <p className="font-sans text-[13px] text-white/80 mt-1">
+                  Receba <strong>{formatBRL(ride.price || 0)}</strong> em mãos do passageiro.
+                </p>
+                <button
+                  type="button"
+                  disabled={isConfirmingCash}
+                  onClick={handleConfirmCashOrManualPaid}
+                  className="mt-4 w-full h-12 rounded-xl bg-[#0DB87E] font-display font-semibold text-white shadow-lg active:scale-98 transition-all"
+                >
+                  {isConfirmingCash ? "Confirmando..." : `Confirmar Recebimento em Dinheiro (${formatBRL(ride.price || 0)})`}
+                </button>
+              </div>
+            )}
+
+            {paymentMethodSelected === "pix_checkout" && (
+              <div className="rounded-2xl p-4 bg-zinc-900/90 border border-white/10 text-center shadow-lg">
+                <div className="w-10 h-10 mx-auto rounded-full bg-blue-500/20 flex items-center justify-center mb-2">
+                  <Smartphone size={20} className="text-blue-400" />
+                </div>
+                <p className="font-display text-[14px] font-bold text-white">Pix no Celular do Passageiro</p>
+                <p className="font-sans text-[12px] text-white/60 mt-1">
+                  O passageiro está efetuando o Pix direto no smartphone dele.
+                </p>
+                <div className="mt-3 flex items-center justify-center gap-2 text-amber-400 text-[12px]">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                  Aguardando confirmação do gateway...
+                </div>
+              </div>
+            )}
+
+            {paymentMethodSelected === "card" && (
+              <div className="rounded-2xl p-4 bg-zinc-900/90 border border-white/10 text-center shadow-lg">
+                <div className="w-10 h-10 mx-auto rounded-full bg-purple-500/20 flex items-center justify-center mb-2">
+                  <CreditCard size={20} className="text-purple-400" />
+                </div>
+                <p className="font-display text-[14px] font-bold text-white">Cartão de Crédito</p>
+                <p className="font-sans text-[12px] text-white/60 mt-1">
+                  O passageiro está processando o pagamento via Cartão.
+                </p>
+                <div className="mt-3 flex items-center justify-center gap-2 text-amber-400 text-[12px]">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                  Aguardando confirmação da operadora...
+                </div>
+              </div>
+            )}
+
+            {!paymentMethodSelected && (
+              <div className="rounded-2xl p-4 bg-zinc-900/90 border border-white/10 text-center">
+                <p className="font-sans text-[13px] text-white/70">
+                  Aguardando o passageiro escolher a forma de pagamento...
+                </p>
+                <div className="mt-2.5 flex items-center justify-center gap-2 text-[#F5A623] text-[12px]">
+                  <span className="w-2 h-2 rounded-full bg-[#F5A623] animate-pulse" />
+                  Sincronizando em tempo real
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div
           className="mt-5 rounded-2xl text-center"

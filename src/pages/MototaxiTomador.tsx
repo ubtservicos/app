@@ -17,6 +17,11 @@ import {
   X,
   User,
   MessageSquare,
+  Scan,
+  Smartphone,
+  Banknote,
+  Copy,
+  Check,
 } from "lucide-react";
 import MototaxiMap from "@/components/mototaxi/MototaxiMap";
 import SplitBreakdown from "@/components/mototaxi/SplitBreakdown";
@@ -549,7 +554,8 @@ const InProgressSheet = ({
   );
 };
 
-/* -------------------- COMPLETED Screen -------------------- */
+type PaymentMethodOption = "pix_scanner" | "pix_checkout" | "card" | "cash";
+
 const CompletedScreen = ({
   price,
   distanceKm,
@@ -566,11 +572,13 @@ const CompletedScreen = ({
   onPay: () => void;
 }) => {
   const user = useCurrentUser();
-  const [method, setMethod] = useState<"pix" | "card">("pix");
+  const [method, setMethod] = useState<PaymentMethodOption>("pix_checkout");
   const [confirming, setConfirming] = useState(false);
   const [pixSeconds, setPixSeconds] = useState(300);
   const [isLoading, setIsLoading] = useState(false);
   const [qrCodeBase64, setQrCodeBase64] = useState<string>("");
+  const [pixCopiaCola, setPixCopiaCola] = useState<string>("");
+  const [copiedPix, setCopiedPix] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [feeSettings, setFeeSettings] = useState<GatewayFeeSettings>(DEFAULT_FEE_SETTINGS);
 
@@ -579,10 +587,12 @@ const CompletedScreen = ({
   }, []);
 
   const rawBase = price > 0 ? price : 10.00;
-  const feeCalc = calculatePaymentWithFee(rawBase, method, feeSettings);
+  // Calculate fee mapping for split display
+  const feeMethodType = (method === "card" ? "card" : "pix") as "pix" | "card";
+  const feeCalc = calculatePaymentWithFee(rawBase, feeMethodType, feeSettings);
 
   useEffect(() => {
-    if (method !== "pix") return;
+    if (method !== "pix_checkout") return;
     const id = setInterval(() => setPixSeconds((s) => Math.max(0, s - 1)), 1000);
     return () => clearInterval(id);
   }, [method]);
@@ -593,7 +603,6 @@ const CompletedScreen = ({
   const [cardHolder, setCardHolder] = useState("");
   const [cardExpiry, setCardExpiry] = useState("");
   const [cardCvv, setCardCvv] = useState("");
-  const [cardCpf, setCardCpf] = useState("");
 
   const formatCardNumber = (v: string) => {
     const clean = v.replace(/\D/g, "").slice(0, 16);
@@ -614,17 +623,47 @@ const CompletedScreen = ({
       setCardHolder("Felipe Santander");
       setCardExpiry("11/28");
       setCardCvv("123");
-      setCardCpf("123.456.789-00");
     } else {
       setCardNumber("5031 7557 3450 1234");
       setCardHolder("Silvina Luz");
       setCardExpiry("05/29");
       setCardCvv("789");
-      setCardCpf("987.654.321-99");
     }
   };
 
-  const handleConfirmPayment = async () => {
+  // Broadcast & DB notify when selecting Pix Scanner or Cash
+  const handleSelectMethod = async (m: PaymentMethodOption) => {
+    setMethod(m);
+    setPaymentError(null);
+    setQrCodeBase64("");
+    setPixCopiaCola("");
+
+    if (rideId) {
+      try {
+        const updatePayload = m === "cash"
+          ? { payment_method: "cash", status: "waiting_cash", updated_at: new Date().toISOString() }
+          : { payment_method: m, updated_at: new Date().toISOString() };
+        
+        await supabase.from("mototaxi_corridas").update(updatePayload).eq("id", rideId);
+
+        const channel = supabase.channel(`ride_msg_${rideId}`);
+        channel.subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            channel.send({
+              type: "broadcast",
+              event: "payment_method_selected",
+              payload: { method: m, rideId, amount: feeCalc.totalAmount },
+            });
+          }
+        });
+      } catch (e) {
+        console.warn("Aviso ao sincronizar escolha de pagamento:", e);
+      }
+    }
+  };
+
+  // Direct fetch to payment-gateway Edge Function (unmasking 400 details)
+  const handleProcessPayment = async (paymentType: "pix" | "card") => {
     setIsLoading(true);
     setPaymentError(null);
     const finalAmount = Number(feeCalc.totalAmount.toFixed(2));
@@ -632,60 +671,76 @@ const CompletedScreen = ({
       const cardClean = cardNumber.replace(/\s+/g, "");
       const [expMonth, expYear] = cardExpiry.split("/");
 
-      const paymentMethodId = method === "pix" ? "pix" : (cardClean.startsWith("5") ? "master" : "visa");
-      const cardToken = method === "card" ? (cardClean ? `mock_token_${cardClean.slice(-4)}` : "mock_token_4242") : undefined;
+      const paymentMethodId = paymentType === "pix" ? "pix" : (cardClean.startsWith("5") ? "master" : "visa");
+      const cardToken = paymentType === "card" ? (cardClean ? `mock_token_${cardClean.slice(-4)}` : "mock_token_4242") : undefined;
 
-      const { data, error } = await supabase.functions.invoke('payment-gateway', {
-        body: {
-          action: "create_payment_intent",
-          service_type: "mototaxi",
-          service_id: rideId || "00000000-0000-0000-0000-000000000001",
-          external_reference: rideId || undefined,
-          transaction_amount: finalAmount,
-          provider_id: prestadorInfo?.id || "0a5edf64-7585-401f-b310-126529607da0",
-          provider_name: prestadorInfo?.name || "Silvina Luz",
-          payer_email: user?.email || "felipe@exemplo.com",
-          payer_first_name: (cardHolder || user?.name || "Felipe").split(" ")[0],
-          payer_last_name: (cardHolder || user?.name || "Santander").split(" ").slice(1).join(" ") || "Santander",
-          description: `Corrida UBT Mototáxi - ${formatBRL(finalAmount)} (Split 7 Vias)`,
-          payment_method_id: paymentMethodId,
-          token: cardToken,
-          card_data: method === "card" ? {
-            number: cardClean,
-            cardholder_name: cardHolder || "Felipe Santander",
-            expiration_month: expMonth ? parseInt(expMonth, 10) : 12,
-            expiration_year: expYear ? (expYear.length === 2 ? 2000 + parseInt(expYear, 10) : parseInt(expYear, 10)) : 2028,
-            security_code: cardCvv || "123",
-          } : undefined
-        }
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://bexbgvsqgjhjuhupkdfp.supabase.co";
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJleGJndnNxZ2poanVodXBrZGZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY3NDY1MDgsImV4cCI6MjA2MjMyMjUwOH0.B8L4tLlhK8Q-8M5rZ1M6Vq1bZkE6Z8c7zK2g5jY1e7E";
+      const session = (await supabase.auth.getSession()).data.session;
+      const token = session?.access_token || anonKey;
+
+      const payload = {
+        action: "create_payment_intent",
+        service_type: "mototaxi",
+        service_id: rideId || "00000000-0000-0000-0000-000000000001",
+        external_reference: rideId || undefined,
+        transaction_amount: finalAmount,
+        provider_id: prestadorInfo?.id || "0a5edf64-7585-401f-b310-126529607da0",
+        provider_name: prestadorInfo?.name || "Silvina Luz",
+        payer_email: user?.email || "felipe@exemplo.com",
+        payer_first_name: (cardHolder || user?.name || "Felipe").split(" ")[0],
+        payer_last_name: (cardHolder || user?.name || "Santander").split(" ").slice(1).join(" ") || "Santander",
+        description: `Corrida UBT Mototáxi - ${formatBRL(finalAmount)} (Split 7 Vias)`,
+        payment_method_id: paymentMethodId,
+        token: cardToken,
+        card_data: paymentType === "card" ? {
+          number: cardClean,
+          cardholder_name: cardHolder || "Felipe Santander",
+          expiration_month: expMonth ? parseInt(expMonth, 10) : 12,
+          expiration_year: expYear ? (expYear.length === 2 ? 2000 + parseInt(expYear, 10) : parseInt(expYear, 10)) : 2028,
+          security_code: cardCvv || "123",
+        } : undefined,
+      };
+
+      const res = await fetch(`${supabaseUrl}/functions/v1/payment-gateway`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": anonKey,
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
       });
 
-      if (error) {
-        let detailedMsg = error.message;
-        try {
-          if ((error as any)?.context?.json) {
-            const jsonErr = (error as any).context.json;
-            detailedMsg = jsonErr.error || jsonErr.message || detailedMsg;
-            if (jsonErr.details) {
-              detailedMsg += ` (${typeof jsonErr.details === "string" ? jsonErr.details : JSON.stringify(jsonErr.details)})`;
-            }
-          }
-        } catch {}
-        throw new Error(detailedMsg);
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || data.error) {
+        const errMain = data.error || `Erro ${res.status}: Pagamento rejeitado pelo gateway`;
+        let errDetails = "";
+        if (data.details) {
+          errDetails = typeof data.details === "object" ? JSON.stringify(data.details) : String(data.details);
+        } else if (data.detail) {
+          errDetails = data.detail;
+        }
+        throw new Error(errDetails ? `${errMain} (${errDetails})` : errMain);
       }
 
       if (data?.split?.statement) {
         console.log("✅ [UBT Split Engine 7 Vias Extrato]:\n" + data.split.statement);
       }
+
       if (data?.pix?.qr_code_base64) {
         setQrCodeBase64(data.pix.qr_code_base64);
+        if (data.pix.qr_code) {
+          setPixCopiaCola(data.pix.qr_code);
+        }
       } else {
         if (rideId) {
           try {
             await supabase
-              .from('mototaxi_corridas')
-              .update({ status: 'paid', updated_at: new Date().toISOString() })
-              .eq('id', rideId);
+              .from("mototaxi_corridas")
+              .update({ status: "paid", updated_at: new Date().toISOString() })
+              .eq("id", rideId);
           } catch (e) {
             console.warn("Aviso ao atualizar status para paid:", e);
           }
@@ -695,7 +750,7 @@ const CompletedScreen = ({
       }
     } catch (err: any) {
       console.error("Payment failed:", err);
-      const msg = err?.message || err?.error || "Erro no processamento do pagamento pelo gateway.";
+      const msg = err?.message || "Erro no processamento do pagamento.";
       setPaymentError(msg);
       toast.error(`Falha no pagamento: ${msg}`);
     } finally {
@@ -703,9 +758,33 @@ const CompletedScreen = ({
     }
   };
 
+  const handleCopyPix = () => {
+    if (pixCopiaCola) {
+      navigator.clipboard.writeText(pixCopiaCola);
+      setCopiedPix(true);
+      toast.success("Código Pix copiado com sucesso!");
+      setTimeout(() => setCopiedPix(false), 3000);
+    }
+  };
+
+  const handleConfirmManualPaid = async () => {
+    if (rideId) {
+      try {
+        await supabase
+          .from("mototaxi_corridas")
+          .update({ status: "paid", updated_at: new Date().toISOString() })
+          .eq("id", rideId);
+      } catch (e) {
+        console.warn("Aviso ao atualizar status para paid:", e);
+      }
+    }
+    setConfirming(true);
+    setTimeout(onPay, 1500);
+  };
+
   return (
     <div className="min-h-[100svh] bg-navy text-white overflow-y-auto" style={{ padding: "24px 24px 96px" }}>
-      <h1 className="font-display text-[22px] font-bold">Resumo da corrida</h1>
+      <h1 className="font-display text-[22px] font-bold">Resumo e Pagamento</h1>
 
       <div className="mt-4 rounded-2xl p-5" style={{ background: "rgba(255,255,255,0.04)" }}>
         <div className="flex justify-between font-sans text-[14px]">
@@ -747,60 +826,152 @@ const CompletedScreen = ({
       </div>
 
       <p className="mt-6 font-sans text-[12px] font-semibold tracking-wider uppercase" style={{ color: "rgba(255,255,255,0.55)" }}>
-        Forma de pagamento
+        Escolha como deseja pagar
       </p>
-      <div className="mt-2 grid grid-cols-2 gap-3">
+
+      {/* 4 DIRECT PAYMENT BUTTONS */}
+      <div className="mt-3 grid grid-cols-2 gap-2.5">
+        {/* 1. Pix Scanner */}
         <button
-          onClick={() => setMethod("pix")}
-          className="rounded-2xl p-4 flex flex-col items-center justify-center transition-all"
+          type="button"
+          onClick={() => handleSelectMethod("pix_scanner")}
+          className="rounded-2xl p-3.5 flex flex-col items-start text-left transition-all active:scale-[0.98]"
           style={{
-            background: method === "pix" ? "rgba(13,184,126,0.12)" : "rgba(255,255,255,0.04)",
-            border: method === "pix" ? "2px solid #0DB87E" : "1px solid rgba(255,255,255,0.08)",
+            background: method === "pix_scanner" ? "rgba(13,184,126,0.15)" : "rgba(255,255,255,0.04)",
+            border: method === "pix_scanner" ? "2px solid #0DB87E" : "1px solid rgba(255,255,255,0.08)",
           }}
         >
-          <QrCode size={24} style={{ color: method === "pix" ? "#0DB87E" : "rgba(255,255,255,0.7)" }} />
-          <span className="mt-2 font-display text-[14px] font-bold">PIX</span>
-          <span className="font-sans text-[11px]" style={{ color: "rgba(255,255,255,0.45)" }}>
-            Acréscimo: {feeSettings.pix_fee_percentage}%
-          </span>
+          <div className="w-8 h-8 rounded-full flex items-center justify-center mb-2" style={{ background: method === "pix_scanner" ? "#0DB87E" : "rgba(255,255,255,0.08)" }}>
+            <Scan size={18} className={method === "pix_scanner" ? "text-white" : "text-white/70"} />
+          </div>
+          <span className="font-display text-[13px] font-bold">Pix Scanner</span>
+          <span className="font-sans text-[11px] text-white/50 mt-0.5">Ler QR do motorista</span>
         </button>
 
+        {/* 2. Pix Checkout */}
         <button
-          onClick={() => setMethod("card")}
-          className="rounded-2xl p-4 flex flex-col items-center justify-center transition-all"
+          type="button"
+          onClick={() => handleSelectMethod("pix_checkout")}
+          className="rounded-2xl p-3.5 flex flex-col items-start text-left transition-all active:scale-[0.98]"
           style={{
-            background: method === "card" ? "rgba(13,184,126,0.12)" : "rgba(255,255,255,0.04)",
+            background: method === "pix_checkout" ? "rgba(13,184,126,0.15)" : "rgba(255,255,255,0.04)",
+            border: method === "pix_checkout" ? "2px solid #0DB87E" : "1px solid rgba(255,255,255,0.08)",
+          }}
+        >
+          <div className="w-8 h-8 rounded-full flex items-center justify-center mb-2" style={{ background: method === "pix_checkout" ? "#0DB87E" : "rgba(255,255,255,0.08)" }}>
+            <Smartphone size={18} className={method === "pix_checkout" ? "text-white" : "text-white/70"} />
+          </div>
+          <span className="font-display text-[13px] font-bold">Pix no Celular</span>
+          <span className="font-sans text-[11px] text-white/50 mt-0.5">Copia e Cola no app</span>
+        </button>
+
+        {/* 3. Cartão de Crédito */}
+        <button
+          type="button"
+          onClick={() => handleSelectMethod("card")}
+          className="rounded-2xl p-3.5 flex flex-col items-start text-left transition-all active:scale-[0.98]"
+          style={{
+            background: method === "card" ? "rgba(13,184,126,0.15)" : "rgba(255,255,255,0.04)",
             border: method === "card" ? "2px solid #0DB87E" : "1px solid rgba(255,255,255,0.08)",
           }}
         >
-          <CreditCard size={24} style={{ color: method === "card" ? "#0DB87E" : "rgba(255,255,255,0.7)" }} />
-          <span className="mt-2 font-display text-[14px] font-bold">Cartão de Crédito</span>
-          <span className="font-sans text-[11px]" style={{ color: "rgba(255,255,255,0.45)" }}>
-            Acréscimo: {feeSettings.credit_card_fee_percentage}%
-          </span>
+          <div className="w-8 h-8 rounded-full flex items-center justify-center mb-2" style={{ background: method === "card" ? "#0DB87E" : "rgba(255,255,255,0.08)" }}>
+            <CreditCard size={18} className={method === "card" ? "text-white" : "text-white/70"} />
+          </div>
+          <span className="font-display text-[13px] font-bold">Cartão de Crédito</span>
+          <span className="font-sans text-[11px] text-white/50 mt-0.5">Split UBT seguro</span>
+        </button>
+
+        {/* 4. Em Dinheiro */}
+        <button
+          type="button"
+          onClick={() => handleSelectMethod("cash")}
+          className="rounded-2xl p-3.5 flex flex-col items-start text-left transition-all active:scale-[0.98]"
+          style={{
+            background: method === "cash" ? "rgba(13,184,126,0.15)" : "rgba(255,255,255,0.04)",
+            border: method === "cash" ? "2px solid #0DB87E" : "1px solid rgba(255,255,255,0.08)",
+          }}
+        >
+          <div className="w-8 h-8 rounded-full flex items-center justify-center mb-2" style={{ background: method === "cash" ? "#0DB87E" : "rgba(255,255,255,0.08)" }}>
+            <Banknote size={18} className={method === "cash" ? "text-white" : "text-white/70"} />
+          </div>
+          <span className="font-display text-[13px] font-bold">Em Dinheiro</span>
+          <span className="font-sans text-[11px] text-white/50 mt-0.5">Pagamento presencial</span>
         </button>
       </div>
 
-      {method === "pix" && (
-        <div className="mt-4 rounded-2xl p-5 flex flex-col items-center" style={{ background: "rgba(255,255,255,0.04)" }}>
-          {qrCodeBase64 ? (
-            <div className="bg-white p-2 rounded-xl mb-3 shadow-lg">
-              <img src={`data:image/png;base64,${qrCodeBase64}`} alt="QR Code PIX" className="w-44 h-44" />
-            </div>
-          ) : (
-            <div className="w-44 h-44 rounded-xl flex items-center justify-center mb-3" style={{ background: "rgba(255,255,255,0.08)" }}>
-              <QrCode size={80} style={{ color: "rgba(255,255,255,0.3)" }} />
-            </div>
-          )}
-          <p className="font-sans text-[13px] text-center" style={{ color: "rgba(255,255,255,0.7)" }}>
-            Escaneie o QR Code ou pague pelo app do seu banco
+      {/* METHOD CONTENT 1: PIX SCANNER */}
+      {method === "pix_scanner" && (
+        <div className="mt-4 rounded-2xl p-5 bg-white/5 border border-white/10 text-center">
+          <div className="w-14 h-14 mx-auto rounded-full bg-[#0DB87E]/20 border border-[#0DB87E]/40 flex items-center justify-center mb-3">
+            <Scan size={28} className="text-[#0DB87E]" />
+          </div>
+          <h3 className="font-display text-[16px] font-bold text-white">QR Code no celular do motorista</h3>
+          <p className="font-sans text-[13px] text-white/70 mt-1.5 leading-relaxed">
+            O motorista está exibindo o QR Code na tela dele. Abra o aplicativo do seu banco, escolha <strong>Pix &gt; Ler QR Code</strong> e aponte a câmera.
           </p>
-          <p className="mt-1 font-mono text-[12px] font-semibold" style={{ color: "#F5A623" }}>
-            Expira em {mm}:{ss}
-          </p>
+          <button
+            type="button"
+            onClick={handleConfirmManualPaid}
+            className="mt-5 w-full h-12 rounded-xl font-display font-semibold text-white bg-[#0DB87E] active:scale-[0.98] transition-all"
+          >
+            Já realizei o Pix no QR Code
+          </button>
         </div>
       )}
 
+      {/* METHOD CONTENT 2: PIX CHECKOUT (NO CELULAR) */}
+      {method === "pix_checkout" && (
+        <div className="mt-4 rounded-2xl p-5 flex flex-col items-center bg-white/5 border border-white/10">
+          {qrCodeBase64 ? (
+            <div className="bg-white p-2.5 rounded-xl mb-3 shadow-lg">
+              <img src={`data:image/png;base64,${qrCodeBase64}`} alt="QR Code PIX" className="w-44 h-44" />
+            </div>
+          ) : (
+            <div className="w-44 h-44 rounded-xl flex flex-col items-center justify-center mb-3 bg-white/5 border border-white/10">
+              <QrCode size={64} className="text-white/30 mb-2" />
+              <button
+                type="button"
+                disabled={isLoading}
+                onClick={() => handleProcessPayment("pix")}
+                className="px-4 py-2 rounded-lg bg-[#0DB87E] text-white font-sans text-[12px] font-semibold active:scale-95 transition-all"
+              >
+                {isLoading ? "Gerando Pix..." : "Gerar QR Code Pix"}
+              </button>
+            </div>
+          )}
+
+          {pixCopiaCola && (
+            <div className="w-full mt-2">
+              <button
+                type="button"
+                onClick={handleCopyPix}
+                className="w-full py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white font-sans text-[12px] font-medium flex items-center justify-center gap-2 active:scale-98 transition-all"
+              >
+                {copiedPix ? <Check size={14} className="text-[#0DB87E]" /> : <Copy size={14} />}
+                {copiedPix ? "Código Pix Copiado!" : "Copiar Código Pix Copia e Cola"}
+              </button>
+            </div>
+          )}
+
+          <p className="mt-3 font-sans text-[13px] text-center text-white/70">
+            Escaneie o QR Code ou cole o código no app do seu banco
+          </p>
+          <p className="mt-1 font-mono text-[12px] font-semibold text-[#F5A623]">
+            Expira em {mm}:{ss}
+          </p>
+
+          <button
+            type="button"
+            onClick={handleConfirmManualPaid}
+            className="mt-4 w-full h-12 rounded-xl font-display font-semibold text-white border border-[#0DB87E] text-[#0DB87E] hover:bg-[#0DB87E]/10 active:scale-98 transition-all"
+          >
+            Já Paguei no meu Banco
+          </button>
+        </div>
+      )}
+
+      {/* METHOD CONTENT 3: CARTÃO DE CRÉDITO */}
       {method === "card" && (
         <div className="mt-4 rounded-2xl p-4 bg-white/5 border border-white/10 space-y-3">
           <div className="flex items-center justify-between pb-2 border-b border-white/10">
@@ -811,14 +982,14 @@ const CompletedScreen = ({
                 onClick={() => applyTestCard("master")}
                 className="px-2 py-0.5 rounded bg-emerald-500/20 text-[#0DB87E] text-[10px] font-mono hover:bg-emerald-500/30"
               >
-                Teste MP 1
+                Teste Master
               </button>
               <button
                 type="button"
                 onClick={() => applyTestCard("visa")}
                 className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 text-[10px] font-mono hover:bg-blue-500/30"
               >
-                Teste MP 2
+                Teste Visa
               </button>
             </div>
           </div>
@@ -870,6 +1041,37 @@ const CompletedScreen = ({
               />
             </div>
           </div>
+
+          <button
+            type="button"
+            disabled={isLoading}
+            onClick={() => handleProcessPayment("card")}
+            className="mt-3 w-full h-12 rounded-xl font-display font-semibold text-white flex items-center justify-center bg-[#0DB87E] active:scale-[0.98] transition-all"
+            style={{ opacity: isLoading ? 0.7 : 1 }}
+          >
+            {isLoading ? (
+              <div className="w-6 h-6 border-2 border-t-transparent border-white rounded-full animate-spin" />
+            ) : (
+              `Pagar com Cartão (${formatBRL(feeCalc.totalAmount)})`
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* METHOD CONTENT 4: EM DINHEIRO */}
+      {method === "cash" && (
+        <div className="mt-4 rounded-2xl p-5 bg-white/5 border border-white/10 text-center">
+          <div className="w-14 h-14 mx-auto rounded-full bg-[#F5A623]/20 border border-[#F5A623]/40 flex items-center justify-center mb-3">
+            <Banknote size={28} className="text-[#F5A623]" />
+          </div>
+          <h3 className="font-display text-[16px] font-bold text-white">Pagamento Presencial em Dinheiro</h3>
+          <p className="font-sans text-[13px] text-white/70 mt-1.5 leading-relaxed">
+            Entregue o valor de <strong>{formatBRL(feeCalc.baseAmount)}</strong> em cédula ou moeda ao motorista.
+          </p>
+          <div className="mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 font-sans text-[12px] flex items-center justify-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
+            Aguardando confirmação do motorista...
+          </div>
         </div>
       )}
 
@@ -884,32 +1086,6 @@ const CompletedScreen = ({
             ✕
           </button>
         </div>
-      )}
-
-      {qrCodeBase64 ? (
-        <button
-          onClick={() => {
-            setConfirming(true);
-            setTimeout(onPay, 1500);
-          }}
-          className="mt-6 w-full h-12 rounded-xl font-display font-semibold text-white border border-[#0DB87E]"
-          style={{ background: "transparent", color: "#0DB87E" }}
-        >
-          Já Paguei
-        </button>
-      ) : (
-        <button
-          disabled={isLoading}
-          onClick={handleConfirmPayment}
-          className="mt-6 w-full h-12 rounded-xl font-display font-semibold text-white flex items-center justify-center"
-          style={{ background: "#0DB87E", opacity: isLoading ? 0.7 : 1 }}
-        >
-          {isLoading ? (
-            <div className="w-6 h-6 border-2 border-t-transparent border-white rounded-full animate-spin" />
-          ) : (
-            "Confirmar pagamento"
-          )}
-        </button>
       )}
 
       {confirming && (
