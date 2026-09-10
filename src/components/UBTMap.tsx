@@ -137,7 +137,6 @@ export function UBTMap({
         defaultCenter={defaultCenter}
         defaultZoom={zoom}
         style={style}
-        styles={dark ? GOOGLE_MAPS_DARK_STYLE : undefined}
         disableDefaultUI={true}
         gestureHandling={gestureHandling}
         restriction={{

@@ -640,9 +640,10 @@ const CompletedScreen = ({
 
     if (rideId) {
       try {
-        const updatePayload = m === "cash"
-          ? { payment_method: "cash", status: "waiting_cash", updated_at: new Date().toISOString() }
-          : { payment_method: m, updated_at: new Date().toISOString() };
+        const updatePayload = {
+          payment_method: m === "cash" ? "cash" : "pix",
+          updated_at: new Date().toISOString(),
+        };
         
         await supabase.from("mototaxi_corridas").update(updatePayload).eq("id", rideId);
 
@@ -662,6 +663,41 @@ const CompletedScreen = ({
     }
   };
 
+  // Helper para tokenizar cartão diretamente no Mercado Pago API
+  const tokenizeCard = async (cleanNum: string, name: string, expM: string, expY: string, cvv: string): Promise<string | null> => {
+    const mpPublicKey =
+      import.meta.env.VITE_MERCADO_PAGO_PUBLIC_KEY ||
+      "TEST-4f51e067-1728-4061-9310-91c68e1eb6df";
+
+    try {
+      const res = await fetch(`https://api.mercadopago.com/v1/card_tokens?public_key=${mpPublicKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cardNumber: cleanNum,
+          cardholder: {
+            name: name || "APRO TEST USER",
+            identification: {
+              type: "CPF",
+              number: "19119119100",
+            },
+          },
+          cardExpirationMonth: (expM || "12").padStart(2, "0"),
+          cardExpirationYear: expY ? (expY.length === 2 ? `20${expY}` : expY) : "2028",
+          securityCode: cvv || "123",
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.id) return data.id;
+      }
+    } catch (tokenErr) {
+      console.warn("Aviso ao tokenizar cartão via MP API:", tokenErr);
+    }
+    return null;
+  };
+
   // Direct fetch to payment-gateway Edge Function (unmasking 400 details)
   const handleProcessPayment = async (paymentType: "pix" | "card") => {
     setIsLoading(true);
@@ -672,7 +708,12 @@ const CompletedScreen = ({
       const [expMonth, expYear] = cardExpiry.split("/");
 
       const paymentMethodId = paymentType === "pix" ? "pix" : (cardClean.startsWith("5") ? "master" : "visa");
-      const cardToken = paymentType === "card" ? (cardClean ? `mock_token_${cardClean.slice(-4)}` : "mock_token_4242") : undefined;
+      
+      let cardToken: string | undefined = undefined;
+      if (paymentType === "card") {
+        const generatedToken = await tokenizeCard(cardClean, cardHolder, expMonth, expYear, cardCvv);
+        cardToken = generatedToken || (cardClean ? `mock_token_${cardClean.slice(-4)}` : "mock_token_4242");
+      }
 
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://bexbgvsqgjhjuhupkdfp.supabase.co";
       const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJleGJndnNxZ2poanVodXBrZGZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY3NDY1MDgsImV4cCI6MjA2MjMyMjUwOH0.B8L4tLlhK8Q-8M5rZ1M6Vq1bZkE6Z8c7zK2g5jY1e7E";

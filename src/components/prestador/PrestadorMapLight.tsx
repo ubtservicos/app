@@ -51,13 +51,17 @@ const PrestadorMapLight = ({
   const [polyline, setPolyline] = useState<[number, number][]>([]);
 
   useEffect(() => {
+    let isMounted = true;
     if (!routeFrom || !routeTo) {
       setPolyline([]);
       return;
     }
     getRouteInfo(routeFrom, routeTo).then((info) => {
-      if (info) setPolyline(info.polyline);
+      if (info && isMounted) setPolyline(info.polyline);
     });
+    return () => {
+      isMounted = false;
+    };
   }, [routeFrom?.lat, routeFrom?.lng, routeTo?.lat, routeTo?.lng]);
 
   if (!myLocation || !isValidLatLng(myLocation.lat, myLocation.lng)) {
