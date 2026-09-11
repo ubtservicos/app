@@ -213,37 +213,47 @@ const PrestadorMototaxiActive = () => {
   // Carregar dados da corrida do banco
   useEffect(() => {
     const loadRideFromDb = async (rideId: string) => {
-      const { data, error } = await supabase
-        .from('mototaxi_corridas')
-        .select('*')
-        .eq('id', rideId)
-        .single();
-      if (data && !error) {
-        const originObj = typeof data.origin === 'string' ? JSON.parse(data.origin) : data.origin;
-        const destObj = typeof data.destination === 'string' ? JSON.parse(data.destination) : data.destination;
-        setRide({
-          id: data.id,
-          type: data.type,
-          origin: originObj.address || 'Origem',
-          destination: destObj.address || 'Destino',
-          distanceKm: Number(data.distance_km),
-          durationMin: data.duration_min,
-          price: Number(data.estimated_price),
-          originCoords: { lat: Number(originObj.lat), lng: Number(originObj.lng) },
-          destinationCoords: { lat: Number(destObj.lat), lng: Number(destObj.lng) },
-          paymentMethod: data.payment_method,
-        });
-        if (data.payment_method) {
-          setPaymentMethodSelected(data.payment_method);
+      try {
+        const { data, error } = await supabase
+          .from('mototaxi_corridas')
+          .select('*')
+          .eq('id', rideId)
+          .maybeSingle();
+
+        if (error) {
+          console.warn("[PrestadorMototaxiActive] Aviso ao carregar corrida (possível timeout/504):", error.message);
+          return;
         }
-        if (data.status === 'in_progress') {
-          setPhase("in_progress");
-        } else if (data.status === 'completed') {
-          setPhase("completed");
-        } else if (data.status === 'paid') {
-          setPhase("completed");
-          setIsPaymentConfirmed(true);
+
+        if (data) {
+          const originObj = typeof data.origin === 'string' ? JSON.parse(data.origin) : data.origin;
+          const destObj = typeof data.destination === 'string' ? JSON.parse(data.destination) : data.destination;
+          setRide({
+            id: data.id,
+            type: data.type,
+            origin: originObj?.address || 'Origem',
+            destination: destObj?.address || 'Destino',
+            distanceKm: Number(data.distance_km || 0),
+            durationMin: data.duration_min || 0,
+            price: Number(data.estimated_price || 0),
+            originCoords: { lat: Number(originObj?.lat || UBATUBA.lat), lng: Number(originObj?.lng || UBATUBA.lng) },
+            destinationCoords: { lat: Number(destObj?.lat || UBATUBA.lat), lng: Number(destObj?.lng || UBATUBA.lng) },
+            paymentMethod: data.payment_method,
+          });
+          if (data.payment_method) {
+            setPaymentMethodSelected(data.payment_method);
+          }
+          if (data.status === 'in_progress') {
+            setPhase("in_progress");
+          } else if (data.status === 'completed') {
+            setPhase("completed");
+          } else if (data.status === 'paid') {
+            setPhase("completed");
+            setIsPaymentConfirmed(true);
+          }
         }
+      } catch (err: any) {
+        console.warn("[PrestadorMototaxiActive] Falha de rede ao consultar corrida (resiliente):", err?.message || err);
       }
     };
 

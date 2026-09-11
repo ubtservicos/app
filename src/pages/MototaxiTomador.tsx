@@ -779,6 +779,8 @@ const CompletedScreen = ({
         description: `Corrida UBT Mototáxi - ${formatBRL(finalAmount)} (Split 7 Vias)`,
         payment_method_id: paymentMethodId,
         token: cardToken,
+        card_token: cardToken,
+        card_token_id: cardToken,
         card_data: paymentType === "card" ? {
           number: cardClean,
           cardholder_name: cardHolder || "Felipe Santander",
@@ -815,8 +817,10 @@ const CompletedScreen = ({
         console.log("✅ [UBT Split Engine 7 Vias Extrato]:\n" + data.split.statement);
       }
 
-      if (data?.pix?.qr_code_base64) {
-        setQrCodeBase64(data.pix.qr_code_base64);
+      if (data?.pix?.qr_code_base64 || data?.pix?.qr_code) {
+        if (data.pix.qr_code_base64) {
+          setQrCodeBase64(data.pix.qr_code_base64);
+        }
         if (data.pix.qr_code) {
           setPixCopiaCola(data.pix.qr_code);
         }
@@ -999,24 +1003,6 @@ const CompletedScreen = ({
           <span className="font-display text-[12px] font-bold leading-tight">Cartão</span>
           <span className="font-sans text-[10px] text-white/50 mt-0.5">Crédito online</span>
         </button>
-
-        {/* 4. Em Dinheiro (Oculto temporariamente para testes do checkout transparente)
-        <button
-          type="button"
-          onClick={() => handleSelectMethod("cash")}
-          className="rounded-2xl p-3.5 flex flex-col items-start text-left transition-all active:scale-[0.98]"
-          style={{
-            background: method === "cash" ? "rgba(13,184,126,0.15)" : "rgba(255,255,255,0.04)",
-            border: method === "cash" ? "2px solid #0DB87E" : "1px solid rgba(255,255,255,0.08)",
-          }}
-        >
-          <div className="w-8 h-8 rounded-full flex items-center justify-center mb-2" style={{ background: method === "cash" ? "#0DB87E" : "rgba(255,255,255,0.08)" }}>
-            <Banknote size={18} className={method === "cash" ? "text-white" : "text-white/70"} />
-          </div>
-          <span className="font-display text-[13px] font-bold">Em Dinheiro</span>
-          <span className="font-sans text-[11px] text-white/50 mt-0.5">Pagamento presencial</span>
-        </button>
-        */}
       </div>
 
       {/* METHOD CONTENT 1: PIX SCANNER */}
@@ -1060,56 +1046,64 @@ const CompletedScreen = ({
         </div>
       )}
 
-      {/* METHOD CONTENT 2: PIX CHECKOUT (NO CELULAR) */}
+      {/* METHOD CONTENT 2: PIX CHECKOUT (NO CELULAR - COPIA E COLA APENAS, SEM QR CODE VISUAL) */}
       {method === "pix_checkout" && (
         <div className="mt-4 rounded-2xl p-5 flex flex-col items-center bg-white/5 border border-white/10">
+          <div className="w-12 h-12 rounded-full bg-[#0DB87E]/20 flex items-center justify-center mb-2">
+            <Smartphone size={24} className="text-[#0DB87E]" />
+          </div>
+          <h3 className="font-display text-[16px] font-bold text-white">Pix no Celular (Copia e Cola)</h3>
+          <p className="font-sans text-[12px] text-white/70 text-center mt-1 mb-3">
+            Copie o código abaixo e cole no aplicativo do seu banco:
+          </p>
+
           {isLoading ? (
-            <div className="w-44 h-44 rounded-xl flex flex-col items-center justify-center mb-3 bg-white/5 border border-white/10">
+            <div className="w-full py-6 rounded-xl flex flex-col items-center justify-center bg-white/5 border border-white/10 my-2">
               <span className="w-8 h-8 rounded-full border-2 border-[#0DB87E] border-t-transparent animate-spin mb-3" />
-              <p className="font-sans text-[12px] text-white/70 text-center px-2">Gerando Pix no Mercado Pago...</p>
+              <p className="font-sans text-[12px] text-white/70 text-center px-2">Gerando chave Pix no Mercado Pago...</p>
             </div>
-          ) : qrCodeBase64 ? (
-            <div className="bg-white p-2.5 rounded-xl mb-3 shadow-lg">
-              <img src={`data:image/png;base64,${qrCodeBase64}`} alt="QR Code PIX" className="w-44 h-44 object-contain" />
+          ) : pixCopiaCola ? (
+            <div className="w-full space-y-3">
+              <div className="relative">
+                <textarea
+                  readOnly
+                  rows={3}
+                  value={pixCopiaCola}
+                  className="w-full rounded-xl p-3 bg-black/40 border border-white/15 text-white font-mono text-[11px] leading-relaxed resize-none outline-none select-all"
+                  onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCopyPix}
+                className="w-full py-3 px-4 rounded-xl bg-[#0DB87E] hover:bg-[#0DB87E]/90 text-white font-sans text-[13px] font-semibold flex items-center justify-center gap-2 shadow-lg active:scale-98 transition-all"
+              >
+                {copiedPix ? <Check size={16} className="text-white" /> : <Copy size={16} />}
+                {copiedPix ? "Código Pix Copiado!" : "Copiar Código Pix Copia e Cola"}
+              </button>
+
+              <p className="font-mono text-[12px] font-semibold text-center text-[#F5A623]">
+                Expira em {mm}:{ss}
+              </p>
             </div>
           ) : (
-            <div className="w-44 h-44 rounded-xl flex flex-col items-center justify-center mb-3 bg-white/5 border border-white/10">
-              <QrCode size={64} className="text-white/30 mb-2" />
+            <div className="w-full py-4 rounded-xl flex flex-col items-center justify-center bg-white/5 border border-white/10">
               <button
                 type="button"
                 disabled={isLoading}
                 onClick={() => handleProcessPayment("pix", "pix_checkout")}
-                className="px-4 py-2 rounded-lg bg-[#0DB87E] text-white font-sans text-[12px] font-semibold active:scale-95 transition-all"
+                className="px-5 py-2.5 rounded-xl bg-[#0DB87E] text-white font-sans text-[13px] font-semibold active:scale-95 transition-all shadow-md"
               >
-                {isLoading ? "Gerando Pix..." : "Gerar QR Code Pix"}
+                Gerar Código Pix
               </button>
             </div>
           )}
-
-          {pixCopiaCola && !isLoading && (
-            <div className="w-full mt-2">
-              <button
-                type="button"
-                onClick={handleCopyPix}
-                className="w-full py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white font-sans text-[12px] font-medium flex items-center justify-center gap-2 active:scale-98 transition-all"
-              >
-                {copiedPix ? <Check size={14} className="text-[#0DB87E]" /> : <Copy size={14} />}
-                {copiedPix ? "Código Pix Copiado!" : "Copiar Código Pix Copia e Cola"}
-              </button>
-            </div>
-          )}
-
-          <p className="mt-3 font-sans text-[13px] text-center text-white/70">
-            Escaneie o QR Code ou cole o código no app do seu banco
-          </p>
-          <p className="mt-1 font-mono text-[12px] font-semibold text-[#F5A623]">
-            Expira em {mm}:{ss}
-          </p>
 
           <button
             type="button"
             onClick={handleConfirmManualPaid}
-            className="mt-4 w-full h-12 rounded-xl font-display font-semibold text-white border border-[#0DB87E] text-[#0DB87E] hover:bg-[#0DB87E]/10 active:scale-98 transition-all"
+            className="mt-4 w-full h-11 rounded-xl font-display font-semibold text-white/90 border border-white/20 hover:bg-white/10 active:scale-98 transition-all text-[13px]"
           >
             Já Paguei no meu Banco
           </button>
