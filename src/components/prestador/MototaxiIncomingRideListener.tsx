@@ -15,6 +15,7 @@ export interface Chamado {
   distanceKm: number;
   durationMin: number;
   price: number;
+  createdAt?: string;
 }
 
 export const playChamadoSound = () => {
@@ -59,6 +60,14 @@ export const playChamadoSound = () => {
 export const parseChamadoData = (c: any): Chamado | null => {
   if (!c || !c.id) return null;
   try {
+    // 60s Window: Ignore any ride created more than 60 seconds ago
+    if (c.created_at) {
+      const ageMs = Date.now() - new Date(c.created_at).getTime();
+      if (isNaN(ageMs) || ageMs > 60000 || ageMs < -10000) {
+        return null;
+      }
+    }
+
     let originObj = c.origin;
     if (typeof originObj === "string") {
       try {
@@ -90,6 +99,7 @@ export const parseChamadoData = (c: any): Chamado | null => {
       distanceKm: Number(c.distance_km || 0),
       durationMin: Number(c.duration_min || 0),
       price: Number(c.estimated_price || 0),
+      createdAt: c.created_at || new Date().toISOString(),
     };
   } catch {
     return null;
@@ -109,7 +119,14 @@ export const ChamadoModal = ({
     return null;
   }
 
-  const [seconds, setSeconds] = useState(60);
+  // Calculate remaining seconds strictly from created_at (NEVER reading startTime)
+  const calculateRemaining = useCallback(() => {
+    if (!chamado?.createdAt) return 60;
+    const elapsed = Math.floor((Date.now() - new Date(chamado.createdAt).getTime()) / 1000);
+    return Math.max(0, 60 - (isNaN(elapsed) ? 0 : elapsed));
+  }, [chamado?.createdAt]);
+
+  const [seconds, setSeconds] = useState<number>(calculateRemaining);
 
   useEffect(() => {
     playChamadoSound();
@@ -117,15 +134,27 @@ export const ChamadoModal = ({
 
   useEffect(() => {
     if (!chamado || !chamado.id) return;
-    if (seconds <= 0) {
+
+    const initialRem = calculateRemaining();
+    if (initialRem <= 0) {
       onReject();
       return;
     }
-    const id = setInterval(() => {
-      setSeconds((s) => s - 1);
+    setSeconds(initialRem);
+
+    const intervalId = setInterval(() => {
+      const rem = calculateRemaining();
+      setSeconds(rem);
+      if (rem <= 0) {
+        clearInterval(intervalId);
+        onReject();
+      }
     }, 1000);
-    return () => clearInterval(id);
-  }, [seconds, onReject, chamado?.id]);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [chamado?.id, chamado?.createdAt, calculateRemaining, onReject]);
 
   const C = 175.93; // 2 * pi * 28
   const dash = (seconds / 60) * C;
@@ -264,12 +293,12 @@ export const MototaxiIncomingRideListener = ({ isOnline }: { isOnline: boolean }
     const fetchActiveChamado = async () => {
       if (typeof document !== "undefined" && document.hidden) return;
       try {
-        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+        const sixtySecsAgo = new Date(Date.now() - 60000).toISOString();
         const { data, error } = await supabase
           .from("mototaxi_corridas")
           .select("*")
           .in("status", ["searching", "pending", "buscando", "solicitado"])
-          .gte("created_at", tenMinutesAgo)
+          .gte("created_at", sixtySecsAgo)
           .or(`prestador_id.is.null,prestador_id.eq.${user.uid}`)
           .order("created_at", { ascending: false })
           .limit(1);
@@ -321,7 +350,7 @@ export const MototaxiIncomingRideListener = ({ isOnline }: { isOnline: boolean }
     const isPending = c && ["searching", "pending", "buscando", "solicitado"].includes(c.status);
     const isTargetPrestador = c && (!c.prestador_id || c.prestador_id === user.uid);
     const isRecent = c?.created_at
-      ? new Date(c.created_at).getTime() > Date.now() - 10 * 60 * 1000
+      ? Date.now() - new Date(c.created_at).getTime() <= 60000
       : true;
 
     if (c && isPending && isTargetPrestador && isRecent) {

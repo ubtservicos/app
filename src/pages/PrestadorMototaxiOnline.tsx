@@ -21,6 +21,7 @@ interface Chamado {
   distanceKm: number;
   durationMin: number;
   price: number;
+  createdAt?: string;
 }
 
 const MOCK_CHAMADO: Chamado = {
@@ -96,7 +97,14 @@ const ChamadoModal = ({
     return null;
   }
 
-  const [seconds, setSeconds] = useState(60);
+  // Calculate remaining seconds strictly from created_at (NEVER reading startTime)
+  const calculateRemaining = useCallback(() => {
+    if (!chamado?.createdAt) return 60;
+    const elapsed = Math.floor((Date.now() - new Date(chamado.createdAt).getTime()) / 1000);
+    return Math.max(0, 60 - (isNaN(elapsed) ? 0 : elapsed));
+  }, [chamado?.createdAt]);
+
+  const [seconds, setSeconds] = useState<number>(calculateRemaining);
 
   useEffect(() => {
     playChamadoSound();
@@ -104,12 +112,27 @@ const ChamadoModal = ({
 
   useEffect(() => {
     if (!chamado || !chamado.id) return;
-    if (seconds <= 0) { onReject(); return; }
-    const id = setInterval(() => {
-      setSeconds((s) => s - 1);
+
+    const initialRem = calculateRemaining();
+    if (initialRem <= 0) {
+      onReject();
+      return;
+    }
+    setSeconds(initialRem);
+
+    const intervalId = setInterval(() => {
+      const rem = calculateRemaining();
+      setSeconds(rem);
+      if (rem <= 0) {
+        clearInterval(intervalId);
+        onReject();
+      }
     }, 1000);
-    return () => clearInterval(id);
-  }, [seconds, onReject, chamado?.id]);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [chamado?.id, chamado?.createdAt, calculateRemaining, onReject]);
 
   const C = 175.93; // 2 * pi * 28
   const dash = (seconds / 60) * C;
@@ -333,14 +356,14 @@ const PrestadorMototaxiOnline = () => {
   useEffect(() => {
     const fetchActiveChamado = async () => {
       try {
-        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+        const sixtySecsAgo = new Date(Date.now() - 60000).toISOString();
 
         const { data, error } = await supabase
           .from('mototaxi_corridas')
           .select('*')
           .in('status', ['searching', 'pending', 'buscando', 'solicitado'])
           .is('prestador_id', null)
-          .gte('created_at', tenMinutesAgo)
+          .gte('created_at', sixtySecsAgo)
           .order('created_at', { ascending: false })
           .limit(1);
 
@@ -375,7 +398,7 @@ const PrestadorMototaxiOnline = () => {
     const isPending = c && ['searching', 'pending', 'buscando', 'solicitado'].includes(c.status);
     const isTargetPrestador = c && (!c.prestador_id || c.prestador_id === user.uid);
     const isRecent = c?.created_at
-      ? new Date(c.created_at).getTime() > Date.now() - 10 * 60 * 1000
+      ? Date.now() - new Date(c.created_at).getTime() <= 60000
       : true;
 
     if (c && isPending && isTargetPrestador && isRecent) {
