@@ -19,31 +19,39 @@ export interface Chamado {
 
 export const playChamadoSound = () => {
   try {
-    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
-      try {
-        (navigator as Navigator).vibrate?.([300, 150, 300, 150, 300]);
-      } catch {}
-    }
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (AudioContextClass) {
-      const audioCtx = new AudioContextClass();
-      if (audioCtx.state === "suspended") {
-        audioCtx.resume().catch(() => {});
+    const userHasInteracted =
+      typeof navigator !== "undefined" &&
+      ((navigator as any).userActivation?.hasBeenActive ?? false);
+
+    if (userHasInteracted) {
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        try {
+          (navigator as Navigator).vibrate?.([200, 100, 200, 100, 500]);
+        } catch {}
       }
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
-      osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.15); // A5
-      osc.frequency.setValueAtTime(1174.66, audioCtx.currentTime + 0.3); // D6
-      gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      try {
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.6);
-      } catch {}
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        const audioCtx = new AudioContextClass();
+        if (audioCtx.state === "suspended") {
+          audioCtx.resume().catch(() => {});
+        }
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.15); // A5
+        osc.frequency.setValueAtTime(1174.66, audioCtx.currentTime + 0.3); // D6
+        gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        try {
+          osc.start();
+          osc.stop(audioCtx.currentTime + 0.6);
+        } catch {}
+      }
+    } else {
+      console.warn("Alerta sonoro suprimido: aguardando interação do usuário.");
     }
   } catch {}
 };

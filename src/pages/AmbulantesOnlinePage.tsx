@@ -161,7 +161,11 @@ const AmbulantesOnlinePage = () => {
           setActiveOrder(prevActive => {
             if (!prevActive || prevActive.status !== "pending") {
               setShowOrderModal(true);
-              if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+              if (typeof navigator !== "undefined" && (navigator as any).userActivation?.hasBeenActive && "vibrate" in navigator) {
+                try {
+                  (navigator as Navigator).vibrate?.([200, 100, 200]);
+                } catch {}
+              }
               return pending;
             }
             return prevActive;
@@ -217,7 +221,11 @@ const AmbulantesOnlinePage = () => {
         itens, total, modalidade: "local_fixo",
       });
       setShowOrderModal(true);
-      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+      if (typeof navigator !== "undefined" && (navigator as any).userActivation?.hasBeenActive && "vibrate" in navigator) {
+        try {
+          (navigator as Navigator).vibrate?.([200, 100, 200]);
+        } catch {}
+      }
     }, 10000);
     return () => {
       if (demoTimerRef.current) window.clearTimeout(demoTimerRef.current);
