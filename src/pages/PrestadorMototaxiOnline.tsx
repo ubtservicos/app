@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { isLocationInUbatuba } from "@/services/GeofenceService";
 import { useRealtimeChannel } from "@/hooks/useRealtimeChannel";
+import { parseChamadoData } from "@/components/prestador/MototaxiIncomingRideListener";
 
 const UBATUBA = { lat: -23.4336, lng: -45.0838 };
 
@@ -29,19 +30,17 @@ const MOCK_CHAMADO: Chamado = {
   destination: "Praia Grande, Quiosque 8",
   distanceKm: 3.4,
   durationMin: 11,
-  price: calcPrice(3.4),
+  price: 12.50,
 };
 
 const Sheet = ({ children }: { children: React.ReactNode }) => (
   <div
-    className="absolute left-0 right-0 bottom-0 z-10"
+    className="absolute left-0 right-0 bottom-0 z-10 text-zinc-100"
     style={{
       background: "var(--prestador-card)",
-      borderTop: "1px solid var(--prestador-border)",
       borderRadius: "24px 24px 0 0",
       padding: "12px 20px 96px",
-      boxShadow: "0 -10px 40px rgba(0,0,0,0.5)",
-      zIndex: 1000,
+      boxShadow: "0 -4px 24px rgba(0,0,0,0.2)",
     }}
   >
     <div className="mx-auto mb-3 rounded-full" style={{ width: 40, height: 4, background: "rgba(255,255,255,0.15)" }} />
@@ -93,6 +92,10 @@ const ChamadoModal = ({
   onAccept,
   onReject,
 }: { chamado: Chamado; onAccept: () => void; onReject: () => void }) => {
+  if (!chamado || !chamado.id || !chamado.origin || !chamado.destination) {
+    return null;
+  }
+
   const [seconds, setSeconds] = useState(60);
 
   useEffect(() => {
@@ -100,14 +103,17 @@ const ChamadoModal = ({
   }, []);
 
   useEffect(() => {
+    if (!chamado || !chamado.id) return;
     if (seconds <= 0) { onReject(); return; }
-    const id = setInterval(() => setSeconds((s) => s - 1), 1000);
+    const id = setInterval(() => {
+      setSeconds((s) => s - 1);
+    }, 1000);
     return () => clearInterval(id);
-  }, [seconds, onReject]);
+  }, [seconds, onReject, chamado?.id]);
 
   const C = 175.93; // 2 * pi * 28
   const dash = (seconds / 60) * C;
-  const youReceive = chamado.price * 0.9;
+  const youReceive = (chamado.price || 0) * 0.9;
 
   return (
     <div
@@ -327,15 +333,14 @@ const PrestadorMototaxiOnline = () => {
   useEffect(() => {
     const fetchActiveChamado = async () => {
       try {
-        const ninetySecsAgo = new Date(Date.now() - 90000).toISOString();
-        console.log('[AUDIT Prestador] Disparando fetchActiveChamado...', { uid: user?.uid, time: new Date().toISOString(), created_after: ninetySecsAgo });
+        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
 
         const { data, error } = await supabase
           .from('mototaxi_corridas')
           .select('*')
           .in('status', ['searching', 'pending', 'buscando', 'solicitado'])
           .is('prestador_id', null)
-          .gt('created_at', ninetySecsAgo)
+          .gte('created_at', tenMinutesAgo)
           .order('created_at', { ascending: false })
           .limit(1);
 
@@ -344,29 +349,15 @@ const PrestadorMototaxiOnline = () => {
           return;
         }
 
-        console.log('[AUDIT Prestador] Resultado do polling:', {
-          total_encontrados: data?.length || 0,
-          chamados: data
-        });
-
         if (data && data.length > 0) {
-          const c = data[0];
-          const originObj = typeof c.origin === 'string' ? JSON.parse(c.origin) : c.origin;
-          const destObj = typeof c.destination === 'string' ? JSON.parse(c.destination) : c.destination;
-          setChamado((prev) => {
-            if (prev && prev.id === c.id) return prev;
-            console.log('[AUDIT Prestador] Novo chamado ativado no estado!', c);
-            playChamadoSound();
-            return {
-              id: c.id,
-              type: c.type || 'carona',
-              origin: originObj?.address || (typeof originObj === 'string' ? originObj : 'Origem'),
-              destination: destObj?.address || (typeof destObj === 'string' ? destObj : 'Destino'),
-              distanceKm: Number(c.distance_km || 0),
-              durationMin: Number(c.duration_min || 0),
-              price: Number(c.estimated_price || 0)
-            };
-          });
+          const parsed = parseChamadoData(data[0]);
+          if (parsed) {
+            setChamado((prev) => {
+              if (prev && prev.id === parsed.id) return prev;
+              playChamadoSound();
+              return parsed;
+            });
+          }
         }
       } catch (err) {
         console.error("[AUDIT Prestador] Erro no polling:", err);
@@ -380,34 +371,20 @@ const PrestadorMototaxiOnline = () => {
 
   // Realtime subscription com auto-reconnect para novas inserções e atualizações de corrida
   const handleNewCorrida = useCallback((payload: any) => {
-    console.log('[AUDIT PrestadorMototaxiOnline] Evento Realtime Recebido:', payload);
     const c = payload.new;
     const isPending = c && ['searching', 'pending', 'buscando', 'solicitado'].includes(c.status);
     const isTargetPrestador = c && (!c.prestador_id || c.prestador_id === user.uid);
-    console.log('[AUDIT PrestadorMototaxiOnline] Avaliação do chamado Realtime:', {
-      corrida_id: c?.id,
-      status: c?.status,
-      prestador_id: c?.prestador_id,
-      my_uid: user.uid,
-      isPending,
-      isTargetPrestador
-    });
+    const isRecent = c?.created_at
+      ? new Date(c.created_at).getTime() > Date.now() - 10 * 60 * 1000
+      : true;
 
-    if (c && isPending && isTargetPrestador) {
+    if (c && isPending && isTargetPrestador && isRecent) {
       try {
-        const originObj = typeof c.origin === 'string' ? JSON.parse(c.origin) : c.origin;
-        const destObj = typeof c.destination === 'string' ? JSON.parse(c.destination) : c.destination;
-        setChamado({
-          id: c.id,
-          type: c.type || 'carona',
-          origin: originObj?.address || (typeof originObj === 'string' ? originObj : 'Origem'),
-          destination: destObj?.address || (typeof destObj === 'string' ? destObj : 'Destino'),
-          distanceKm: Number(c.distance_km || 0),
-          durationMin: Number(c.duration_min || 0),
-          price: Number(c.estimated_price || 0)
-        });
-        console.log('[AUDIT PrestadorMototaxiOnline] Modal e Som acionados via Realtime!');
-        playChamadoSound();
+        const parsed = parseChamadoData(c);
+        if (parsed) {
+          setChamado(parsed);
+          playChamadoSound();
+        }
       } catch (err) {
         console.error("[AUDIT PrestadorMototaxiOnline] Erro ao parsear chamada recebida:", err);
       }

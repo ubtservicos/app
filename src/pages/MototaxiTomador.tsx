@@ -426,11 +426,13 @@ const AcceptedSheet = ({
 }) => {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
+    const id = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
     return () => clearInterval(id);
   }, []);
-  const safeAcceptedAt = acceptedAt || Date.now();
-  const elapsed = Math.floor((now - safeAcceptedAt) / 1000);
+  const safeAcceptedAt = (acceptedAt && !isNaN(acceptedAt) && acceptedAt > 0) ? acceptedAt : now;
+  const elapsed = Math.max(0, Math.floor((now - safeAcceptedAt) / 1000));
   const canCancelFree = elapsed < 60;
   const remaining = Math.max(0, 60 - elapsed);
 

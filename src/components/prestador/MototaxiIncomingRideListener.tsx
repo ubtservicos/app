@@ -56,6 +56,46 @@ export const playChamadoSound = () => {
   } catch {}
 };
 
+export const parseChamadoData = (c: any): Chamado | null => {
+  if (!c || !c.id) return null;
+  try {
+    let originObj = c.origin;
+    if (typeof originObj === "string") {
+      try {
+        originObj = JSON.parse(originObj);
+      } catch {
+        originObj = { address: originObj };
+      }
+    }
+    let destObj = c.destination;
+    if (typeof destObj === "string") {
+      try {
+        destObj = JSON.parse(destObj);
+      } catch {
+        destObj = { address: destObj };
+      }
+    }
+
+    const origin = originObj?.address || (typeof originObj === "string" ? originObj : "");
+    const destination = destObj?.address || (typeof destObj === "string" ? destObj : "");
+
+    // Tratamento Visual de Falta de Dados: ignore incomplete rides
+    if (!origin || !destination) return null;
+
+    return {
+      id: String(c.id),
+      type: c.type === "entrega" ? "entrega" : "carona",
+      origin: String(origin),
+      destination: String(destination),
+      distanceKm: Number(c.distance_km || 0),
+      durationMin: Number(c.duration_min || 0),
+      price: Number(c.estimated_price || 0),
+    };
+  } catch {
+    return null;
+  }
+};
+
 export const ChamadoModal = ({
   chamado,
   onAccept,
@@ -65,6 +105,10 @@ export const ChamadoModal = ({
   onAccept: () => void;
   onReject: () => void;
 }) => {
+  if (!chamado || !chamado.id || !chamado.origin || !chamado.destination) {
+    return null;
+  }
+
   const [seconds, setSeconds] = useState(60);
 
   useEffect(() => {
@@ -72,17 +116,20 @@ export const ChamadoModal = ({
   }, []);
 
   useEffect(() => {
+    if (!chamado || !chamado.id) return;
     if (seconds <= 0) {
       onReject();
       return;
     }
-    const id = setInterval(() => setSeconds((s) => s - 1), 1000);
+    const id = setInterval(() => {
+      setSeconds((s) => s - 1);
+    }, 1000);
     return () => clearInterval(id);
-  }, [seconds, onReject]);
+  }, [seconds, onReject, chamado?.id]);
 
   const C = 175.93; // 2 * pi * 28
   const dash = (seconds / 60) * C;
-  const youReceive = chamado.price * 0.9;
+  const youReceive = (chamado.price || 0) * 0.9;
 
   return (
     <div
@@ -217,10 +264,12 @@ export const MototaxiIncomingRideListener = ({ isOnline }: { isOnline: boolean }
     const fetchActiveChamado = async () => {
       if (typeof document !== "undefined" && document.hidden) return;
       try {
+        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
         const { data, error } = await supabase
           .from("mototaxi_corridas")
           .select("*")
           .in("status", ["searching", "pending", "buscando", "solicitado"])
+          .gte("created_at", tenMinutesAgo)
           .or(`prestador_id.is.null,prestador_id.eq.${user.uid}`)
           .order("created_at", { ascending: false })
           .limit(1);
@@ -233,23 +282,14 @@ export const MototaxiIncomingRideListener = ({ isOnline }: { isOnline: boolean }
         }
 
         if (data && data.length > 0) {
-          const c = data[0];
-          const originObj = typeof c.origin === "string" ? JSON.parse(c.origin) : c.origin;
-          const destObj = typeof c.destination === "string" ? JSON.parse(c.destination) : c.destination;
-
-          setChamado((prev) => {
-            if (prev && prev.id === c.id) return prev;
-            playChamadoSound();
-            return {
-              id: c.id,
-              type: c.type || "carona",
-              origin: originObj?.address || (typeof originObj === "string" ? originObj : "Origem"),
-              destination: destObj?.address || (typeof destObj === "string" ? destObj : "Destino"),
-              distanceKm: Number(c.distance_km || 0),
-              durationMin: Number(c.duration_min || 0),
-              price: Number(c.estimated_price || 0),
-            };
-          });
+          const parsed = parseChamadoData(data[0]);
+          if (parsed) {
+            setChamado((prev) => {
+              if (prev && prev.id === parsed.id) return prev;
+              playChamadoSound();
+              return parsed;
+            });
+          }
         }
       } catch (err) {
         if (typeof document !== "undefined" && !document.hidden) {
@@ -280,21 +320,17 @@ export const MototaxiIncomingRideListener = ({ isOnline }: { isOnline: boolean }
     const c = payload.new;
     const isPending = c && ["searching", "pending", "buscando", "solicitado"].includes(c.status);
     const isTargetPrestador = c && (!c.prestador_id || c.prestador_id === user.uid);
+    const isRecent = c?.created_at
+      ? new Date(c.created_at).getTime() > Date.now() - 10 * 60 * 1000
+      : true;
 
-    if (c && isPending && isTargetPrestador) {
+    if (c && isPending && isTargetPrestador && isRecent) {
       try {
-        const originObj = typeof c.origin === "string" ? JSON.parse(c.origin) : c.origin;
-        const destObj = typeof c.destination === "string" ? JSON.parse(c.destination) : c.destination;
-        setChamado({
-          id: c.id,
-          type: c.type || "carona",
-          origin: originObj?.address || (typeof originObj === "string" ? originObj : "Origem"),
-          destination: destObj?.address || (typeof destObj === "string" ? destObj : "Destino"),
-          distanceKm: Number(c.distance_km || 0),
-          durationMin: Number(c.duration_min || 0),
-          price: Number(c.estimated_price || 0),
-        });
-        playChamadoSound();
+        const parsed = parseChamadoData(c);
+        if (parsed) {
+          setChamado(parsed);
+          playChamadoSound();
+        }
       } catch (err) {
         console.error("[AUDIT Listener] Erro ao parsear chamado realtime:", err);
       }
@@ -328,18 +364,11 @@ export const MototaxiIncomingRideListener = ({ isOnline }: { isOnline: boolean }
         .channel("mototaxi_chamados_broadcast")
         .on("broadcast", { event: "new_chamado" }, ({ payload }) => {
           if (payload && payload.id) {
-            const originObj = typeof payload.origin === "string" ? JSON.parse(payload.origin) : payload.origin;
-            const destObj = typeof payload.destination === "string" ? JSON.parse(payload.destination) : payload.destination;
-            setChamado({
-              id: payload.id,
-              type: payload.type || "carona",
-              origin: originObj?.address || (typeof originObj === "string" ? originObj : "Origem"),
-              destination: destObj?.address || (typeof destObj === "string" ? destObj : "Destino"),
-              distanceKm: Number(payload.distance_km || 0),
-              durationMin: Number(payload.duration_min || 0),
-              price: Number(payload.estimated_price || 0),
-            });
-            playChamadoSound();
+            const parsed = parseChamadoData(payload);
+            if (parsed) {
+              setChamado(parsed);
+              playChamadoSound();
+            }
           }
         })
         .subscribe();
