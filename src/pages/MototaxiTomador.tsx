@@ -640,18 +640,18 @@ const CompletedScreen = ({
     setQrCodeBase64("");
     setPixCopiaCola("");
 
-    const methodMap: Record<PaymentMethodOption, string> = {
-      cash: "dinheiro",
+    const methodMap: Record<PaymentMethodOption, string | null> = {
+      cash: null,
       pix_scanner: "pix",
       pix_checkout: "pix",
-      card: "cartao",
+      card: "card",
     };
 
-    const dbMethod = methodMap[m] || "dinheiro";
+    const dbMethod = methodMap[m] !== undefined ? methodMap[m] : null;
 
     if (rideId) {
       try {
-        const updatePayload = {
+        const updatePayload: { payment_method: string | null } = {
           payment_method: dbMethod,
         };
         
@@ -685,11 +685,17 @@ const CompletedScreen = ({
   // Helper para tokenizar cartão diretamente no Mercado Pago API
   const tokenizeCard = async (cleanNum: string, name: string, expM: string, expY: string, cvv: string): Promise<string | null> => {
     const mpPublicKey =
-      import.meta.env.VITE_MERCADO_PAGO_PUBLIC_KEY ||
-      "TEST-4f51e067-1728-4061-9310-91c68e1eb6df";
+      import.meta.env.VITE_MERCADOPAGO_PUBLIC_KEY ||
+      import.meta.env.VITE_MERCADO_PAGO_PUBLIC_KEY;
+
+    if (!mpPublicKey || mpPublicKey.trim() === "" || mpPublicKey === "undefined") {
+      console.error("VITE_MERCADOPAGO_PUBLIC_KEY não está configurada ou é inválida no ambiente.");
+      return null;
+    }
 
     try {
-      const res = await fetch(`https://api.mercadopago.com/v1/card_tokens?public_key=${mpPublicKey}`, {
+      const cleanKey = mpPublicKey.trim();
+      const res = await fetch(`https://api.mercadopago.com/v1/card_tokens?public_key=${encodeURIComponent(cleanKey)}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -707,14 +713,18 @@ const CompletedScreen = ({
         }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data?.id) return data.id;
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data?.id) {
+        return data.id;
+      } else {
+        console.error("Erro na tokenização Mercado Pago (Status " + res.status + "):", data);
+        return null;
       }
     } catch (tokenErr) {
-      console.warn("Aviso ao tokenizar cartão via MP API:", tokenErr);
+      console.error("Falha ao tokenizar cartão via MP API:", tokenErr);
+      return null;
     }
-    return null;
   };
 
   // Direct fetch to payment-gateway Edge Function (unmasking 400 details)
@@ -730,8 +740,19 @@ const CompletedScreen = ({
       
       let cardToken: string | undefined = undefined;
       if (paymentType === "card") {
+        if (!cardClean || cardClean.length < 13) {
+          setIsLoading(false);
+          setPaymentError("Por favor, informe os dados completos do cartão.");
+          return;
+        }
+
         const generatedToken = await tokenizeCard(cardClean, cardHolder, expMonth, expYear, cardCvv);
-        cardToken = generatedToken || (cardClean ? `mock_token_${cardClean.slice(-4)}` : "mock_token_4242");
+        if (!generatedToken) {
+          setIsLoading(false);
+          setPaymentError("Não foi possível validar o cartão no Mercado Pago (Falha de Tokenização). Verifique os dados do cartão e as credenciais configuradas.");
+          return; // FAIL FAST: Impede chamada ao payment-gateway sem token válido
+        }
+        cardToken = generatedToken;
       }
 
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "https://bexbgvsqgjhjuhupkdfp.supabase.co";

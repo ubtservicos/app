@@ -91,8 +91,8 @@ const PrestadorMototaxiActive = () => {
         })
         .on('broadcast', { event: 'payment_method_selected' }, ({ payload }) => {
           console.log('Método de pagamento selecionado pelo passageiro:', payload);
-          if (payload?.dbMethod || payload?.method) {
-            setPaymentMethodSelected(payload.dbMethod || payload.method);
+          if (payload?.method || payload?.dbMethod) {
+            setPaymentMethodSelected(payload.method || payload.dbMethod);
           }
         })
         .subscribe((status: string) => {
@@ -575,7 +575,7 @@ const PrestadorMototaxiActive = () => {
               </div>
             )}
 
-            {(paymentMethodSelected === "card" || paymentMethodSelected === "cartao") && (
+            {(paymentMethodSelected === "card" || paymentMethodSelected === "cartao" || paymentMethodSelected === "credit_card") && (
               <div className="rounded-2xl p-4 bg-zinc-900/90 border border-white/10 text-center shadow-lg">
                 <div className="w-10 h-10 mx-auto rounded-full bg-purple-500/20 flex items-center justify-center mb-2">
                   <CreditCard size={20} className="text-purple-400" />
