@@ -633,17 +633,26 @@ const CompletedScreen = ({
     }
   };
 
-  // Broadcast & DB notify when selecting Pix Scanner or Cash
+  // Broadcast & DB notify when selecting Pix Scanner, Cash, Card, etc.
   const handleSelectMethod = async (m: PaymentMethodOption) => {
     setMethod(m);
     setPaymentError(null);
     setQrCodeBase64("");
     setPixCopiaCola("");
 
+    const methodMap: Record<PaymentMethodOption, string> = {
+      cash: "dinheiro",
+      pix_scanner: "pix",
+      pix_checkout: "pix",
+      card: "cartao",
+    };
+
+    const dbMethod = methodMap[m] || "dinheiro";
+
     if (rideId) {
       try {
         const updatePayload = {
-          payment_method: m,
+          payment_method: dbMethod,
         };
         
         const { error } = await supabase
@@ -655,16 +664,18 @@ const CompletedScreen = ({
           console.error("Erro Supabase PATCH:", error.message, error.details, error.hint);
         }
 
-        const channel = supabase.channel(`ride_msg_${rideId}`);
-        channel.subscribe((status) => {
-          if (status === "SUBSCRIBED") {
-            channel.send({
-              type: "broadcast",
-              event: "payment_method_selected",
-              payload: { method: m, rideId, amount: feeCalc.totalAmount },
-            });
-          }
-        });
+        const channel = supabase
+          .channel(`ride_msg_${rideId}`)
+          .on("broadcast", { event: "payment_method_selected" }, () => {})
+          .subscribe((status) => {
+            if (status === "SUBSCRIBED") {
+              channel.send({
+                type: "broadcast",
+                event: "payment_method_selected",
+                payload: { method: m, dbMethod, rideId, amount: feeCalc.totalAmount },
+              });
+            }
+          });
       } catch (e: any) {
         console.error("Erro ao sincronizar escolha de pagamento:", e?.message || e);
       }
@@ -1843,24 +1854,26 @@ const MototaxiTomadorPage = () => {
 
     // Broadcast de contingência instantâneo para prestadores online
     try {
-      const broadcastChan = supabase.channel('mototaxi_chamados_broadcast');
-      broadcastChan.subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          broadcastChan.send({
-            type: 'broadcast',
-            event: 'new_chamado',
-            payload: {
-              id: data.id,
-              type: data.type || state.type,
-              origin: data.origin,
-              destination: data.destination,
-              distance_km: data.distance_km,
-              duration_min: data.duration_min,
-              estimated_price: data.estimated_price,
-            }
-          });
-        }
-      });
+      const broadcastChan = supabase
+        .channel('mototaxi_chamados_broadcast')
+        .on('broadcast', { event: 'new_chamado' }, () => {})
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            broadcastChan.send({
+              type: 'broadcast',
+              event: 'new_chamado',
+              payload: {
+                id: data.id,
+                type: data.type || state.type,
+                origin: data.origin,
+                destination: data.destination,
+                distance_km: data.distance_km,
+                duration_min: data.duration_min,
+                estimated_price: data.estimated_price,
+              }
+            });
+          }
+        });
     } catch (e) {
       console.warn('Erro ao enviar broadcast do chamado:', e);
     }
@@ -1933,16 +1946,18 @@ const MototaxiTomadorPage = () => {
             payload: newMsg
           });
         } else {
-          const channel = supabase.channel(`ride_msg_${state.rideId}`);
-          channel.subscribe((status) => {
-            if (status === 'SUBSCRIBED') {
-              channel.send({
-                type: 'broadcast',
-                event: 'quick_message',
-                payload: newMsg
-              });
-            }
-          });
+          const channel = supabase
+            .channel(`ride_msg_${state.rideId}`)
+            .on('broadcast', { event: 'quick_message' }, () => {})
+            .subscribe((status) => {
+              if (status === 'SUBSCRIBED') {
+                channel.send({
+                  type: 'broadcast',
+                  event: 'quick_message',
+                  payload: newMsg
+                });
+              }
+            });
         }
       } catch (e) {
         console.warn("Falha ao transmitir mensagem do tomador:", e);

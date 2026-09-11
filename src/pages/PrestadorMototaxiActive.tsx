@@ -78,8 +78,8 @@ const PrestadorMototaxiActive = () => {
       if (channel) {
         try { supabase.removeChannel(channel); } catch { /* noop */ }
       }
-      channel = supabase.channel(`ride_msg_${ride.id}`);
-      channel
+      channel = supabase
+        .channel(`ride_msg_${ride.id}`)
         .on('broadcast', { event: 'quick_message' }, ({ payload }) => {
           console.log('Mensagem rápida recebida pelo prestador:', payload);
           if (payload?.text && payload?.from === 'tomador') {
@@ -91,8 +91,8 @@ const PrestadorMototaxiActive = () => {
         })
         .on('broadcast', { event: 'payment_method_selected' }, ({ payload }) => {
           console.log('Método de pagamento selecionado pelo passageiro:', payload);
-          if (payload?.method) {
-            setPaymentMethodSelected(payload.method);
+          if (payload?.dbMethod || payload?.method) {
+            setPaymentMethodSelected(payload.dbMethod || payload.method);
           }
         })
         .subscribe((status: string) => {
@@ -157,16 +157,18 @@ const PrestadorMototaxiActive = () => {
             payload: { text, from: 'prestador', ts: Date.now() }
           });
         } else {
-          const channel = supabase.channel(`ride_msg_${ride.id}`);
-          channel.subscribe((status) => {
-            if (status === 'SUBSCRIBED') {
-              channel.send({
-                type: 'broadcast',
-                event: 'quick_message',
-                payload: { text, from: 'prestador', ts: Date.now() }
-              });
-            }
-          });
+          const channel = supabase
+            .channel(`ride_msg_${ride.id}`)
+            .on('broadcast', { event: 'quick_message' }, () => {})
+            .subscribe((status) => {
+              if (status === 'SUBSCRIBED') {
+                channel.send({
+                  type: 'broadcast',
+                  event: 'quick_message',
+                  payload: { text, from: 'prestador', ts: Date.now() }
+                });
+              }
+            });
         }
       } catch (e) {
         console.warn("Falha ao transmitir mensagem do prestador:", e);
@@ -557,7 +559,7 @@ const PrestadorMototaxiActive = () => {
               </div>
             )}
 
-            {paymentMethodSelected === "pix_checkout" && (
+            {(paymentMethodSelected === "pix_checkout" || paymentMethodSelected === "pix") && (
               <div className="rounded-2xl p-4 bg-zinc-900/90 border border-white/10 text-center shadow-lg">
                 <div className="w-10 h-10 mx-auto rounded-full bg-blue-500/20 flex items-center justify-center mb-2">
                   <Smartphone size={20} className="text-blue-400" />
@@ -573,7 +575,7 @@ const PrestadorMototaxiActive = () => {
               </div>
             )}
 
-            {paymentMethodSelected === "card" && (
+            {(paymentMethodSelected === "card" || paymentMethodSelected === "cartao") && (
               <div className="rounded-2xl p-4 bg-zinc-900/90 border border-white/10 text-center shadow-lg">
                 <div className="w-10 h-10 mx-auto rounded-full bg-purple-500/20 flex items-center justify-center mb-2">
                   <CreditCard size={20} className="text-purple-400" />
