@@ -452,12 +452,15 @@ const PrestadorMototaxiActive = () => {
     try {
       const { error } = await supabase
         .from('mototaxi_corridas')
-        .update({ status: 'paid', updated_at: new Date().toISOString() })
+        .update({ status: 'paid' })
         .eq('id', ride.id);
-      if (error) throw error;
+      if (error) {
+        console.error("Erro Supabase PATCH:", error.message, error.details, error.hint);
+        throw error;
+      }
       setIsPaymentConfirmed(true);
-    } catch (e) {
-      console.error("Erro ao confirmar pagamento manual/dinheiro:", e);
+    } catch (e: any) {
+      console.error("Erro ao confirmar pagamento manual/dinheiro:", e?.message || e);
       alert("Erro ao confirmar recebimento.");
     } finally {
       setIsConfirmingCash(false);
@@ -534,7 +537,7 @@ const PrestadorMototaxiActive = () => {
               </div>
             )}
 
-            {paymentMethodSelected === "cash" && (
+            {(paymentMethodSelected === "cash" || paymentMethodSelected === "dinheiro") && (
               <div className="rounded-2xl p-5 bg-amber-500/10 border border-amber-500/30 text-center shadow-xl">
                 <div className="w-12 h-12 mx-auto rounded-full bg-amber-500/20 flex items-center justify-center mb-2">
                   <Banknote size={24} className="text-[#F5A623]" />

@@ -643,11 +643,17 @@ const CompletedScreen = ({
     if (rideId) {
       try {
         const updatePayload = {
-          payment_method: m === "cash" ? "cash" : "pix",
-          updated_at: new Date().toISOString(),
+          payment_method: m,
         };
         
-        await supabase.from("mototaxi_corridas").update(updatePayload).eq("id", rideId);
+        const { error } = await supabase
+          .from("mototaxi_corridas")
+          .update(updatePayload)
+          .eq("id", rideId);
+
+        if (error) {
+          console.error("Erro Supabase PATCH:", error.message, error.details, error.hint);
+        }
 
         const channel = supabase.channel(`ride_msg_${rideId}`);
         channel.subscribe((status) => {
@@ -659,8 +665,8 @@ const CompletedScreen = ({
             });
           }
         });
-      } catch (e) {
-        console.warn("Aviso ao sincronizar escolha de pagamento:", e);
+      } catch (e: any) {
+        console.error("Erro ao sincronizar escolha de pagamento:", e?.message || e);
       }
     }
   };
@@ -780,12 +786,15 @@ const CompletedScreen = ({
       } else {
         if (rideId) {
           try {
-            await supabase
+            const { error: updateErr } = await supabase
               .from("mototaxi_corridas")
-              .update({ status: "paid", updated_at: new Date().toISOString() })
+              .update({ status: "paid" })
               .eq("id", rideId);
-          } catch (e) {
-            console.warn("Aviso ao atualizar status para paid:", e);
+            if (updateErr) {
+              console.error("Erro Supabase PATCH ao marcar paid:", updateErr.message, updateErr.details, updateErr.hint);
+            }
+          } catch (e: any) {
+            console.error("Erro ao atualizar status para paid:", e?.message || e);
           }
         }
         setConfirming(true);
@@ -813,12 +822,15 @@ const CompletedScreen = ({
   const handleConfirmManualPaid = async () => {
     if (rideId) {
       try {
-        await supabase
+        const { error: updateErr } = await supabase
           .from("mototaxi_corridas")
-          .update({ status: "paid", updated_at: new Date().toISOString() })
+          .update({ status: "paid" })
           .eq("id", rideId);
-      } catch (e) {
-        console.warn("Aviso ao atualizar status para paid:", e);
+        if (updateErr) {
+          console.error("Erro Supabase PATCH manual paid:", updateErr.message, updateErr.details, updateErr.hint);
+        }
+      } catch (e: any) {
+        console.error("Erro ao atualizar status para paid:", e?.message || e);
       }
     }
     setConfirming(true);
