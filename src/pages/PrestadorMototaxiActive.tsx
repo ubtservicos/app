@@ -70,32 +70,72 @@ const PrestadorMototaxiActive = () => {
 
   useEffect(() => {
     if (!ride?.id) return;
-    const channel = supabase.channel(`ride_msg_${ride.id}`);
-    channel
-      .on('broadcast', { event: 'quick_message' }, ({ payload }) => {
-        console.log('Mensagem rápida recebida pelo prestador:', payload);
-        if (payload?.text && payload?.from === 'tomador') {
-          setIncomingMessage({
-            text: payload.text,
-            sender: 'Passageiro(a)',
-          });
+
+    let channel: any = null;
+
+    const setupMsgChannel = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch { /* noop */ }
+      }
+      channel = supabase.channel(`ride_msg_${ride.id}`);
+      channel
+        .on('broadcast', { event: 'quick_message' }, ({ payload }) => {
+          console.log('Mensagem rápida recebida pelo prestador:', payload);
+          if (payload?.text && payload?.from === 'tomador') {
+            setIncomingMessage({
+              text: payload.text,
+              sender: 'Passageiro(a)',
+            });
+          }
+        })
+        .on('broadcast', { event: 'payment_method_selected' }, ({ payload }) => {
+          console.log('Método de pagamento selecionado pelo passageiro:', payload);
+          if (payload?.method) {
+            setPaymentMethodSelected(payload.method);
+          }
+        })
+        .subscribe((status: string) => {
+          if (status === 'SUBSCRIBED') {
+            msgChannelRef.current = channel;
+          }
+        });
+    };
+
+    setupMsgChannel();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        if (channel) {
+          try { supabase.removeChannel(channel); } catch { /* noop */ }
+          channel = null;
+          msgChannelRef.current = null;
         }
-      })
-      .on('broadcast', { event: 'payment_method_selected' }, ({ payload }) => {
-        console.log('Método de pagamento selecionado pelo passageiro:', payload);
-        if (payload?.method) {
-          setPaymentMethodSelected(payload.method);
-        }
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          msgChannelRef.current = channel;
-        }
-      });
+      } else if (document.visibilityState === "visible") {
+        setupMsgChannel();
+      }
+    };
+
+    const handlePageHide = () => {
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch { /* noop */ }
+        channel = null;
+        msgChannelRef.current = null;
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("pageshow", setupMsgChannel);
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch { /* noop */ }
+      }
       msgChannelRef.current = null;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("pageshow", setupMsgChannel);
     };
   }, [ride?.id]);
 
@@ -312,30 +352,67 @@ const PrestadorMototaxiActive = () => {
   useEffect(() => {
     if (!ride?.id) return;
 
-    const channel = supabase
-      .channel(`active_ride_${ride.id}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'mototaxi_corridas', filter: `id=eq.${ride.id}` },
-        (payload: any) => {
-          if (payload.new) {
-            if (payload.new.status === 'cancelled') {
-              alert('A corrida foi cancelada pelo passageiro.');
-              sessionStorage.removeItem("ubt_active_ride");
-              navigate("/app/prestador/home");
-            } else if (payload.new.status === 'paid') {
-              setIsPaymentConfirmed(true);
-            }
-            if (payload.new.payment_method) {
-              setPaymentMethodSelected(payload.new.payment_method);
+    let channel: any = null;
+
+    const setupRideChannel = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch { /* noop */ }
+      }
+      channel = supabase
+        .channel(`active_ride_${ride.id}`)
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'mototaxi_corridas', filter: `id=eq.${ride.id}` },
+          (payload: any) => {
+            if (payload.new) {
+              if (payload.new.status === 'cancelled') {
+                alert('A corrida foi cancelada pelo passageiro.');
+                sessionStorage.removeItem("ubt_active_ride");
+                navigate("/app/prestador/home");
+              } else if (payload.new.status === 'paid') {
+                setIsPaymentConfirmed(true);
+              }
+              if (payload.new.payment_method) {
+                setPaymentMethodSelected(payload.new.payment_method);
+              }
             }
           }
+        )
+        .subscribe();
+    };
+
+    setupRideChannel();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        if (channel) {
+          try { supabase.removeChannel(channel); } catch { /* noop */ }
+          channel = null;
         }
-      )
-      .subscribe();
+      } else if (document.visibilityState === "visible") {
+        setupRideChannel();
+      }
+    };
+
+    const handlePageHide = () => {
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch { /* noop */ }
+        channel = null;
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("pageshow", setupRideChannel);
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch { /* noop */ }
+      }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("pageshow", setupRideChannel);
     };
   }, [ride?.id, navigate]);
 

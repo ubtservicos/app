@@ -207,19 +207,20 @@ export const MototaxiIncomingRideListener = ({ isOnline }: { isOnline: boolean }
     }
 
     const fetchActiveChamado = async () => {
+      if (typeof document !== "undefined" && document.hidden) return;
       try {
-        const ninetySecsAgo = new Date(Date.now() - 90000).toISOString();
         const { data, error } = await supabase
           .from("mototaxi_corridas")
           .select("*")
           .in("status", ["searching", "pending", "buscando", "solicitado"])
-          .is("prestador_id", null)
-          .gt("created_at", ninetySecsAgo)
+          .or(`prestador_id.is.null,prestador_id.eq.${user.uid}`)
           .order("created_at", { ascending: false })
           .limit(1);
 
         if (error) {
-          console.error("[AUDIT Listener] Erro no polling de chamados:", error);
+          if (typeof document !== "undefined" && !document.hidden) {
+            console.warn("[AUDIT Listener] Erro no polling de chamados:", error.message);
+          }
           return;
         }
 
@@ -243,13 +244,26 @@ export const MototaxiIncomingRideListener = ({ isOnline }: { isOnline: boolean }
           });
         }
       } catch (err) {
-        console.error("[AUDIT Listener] Exceção no polling de chamados:", err);
+        if (typeof document !== "undefined" && !document.hidden) {
+          console.error("[AUDIT Listener] Exceção no polling de chamados:", err);
+        }
       }
     };
 
     fetchActiveChamado();
     const pollInterval = setInterval(fetchActiveChamado, 2000);
-    return () => clearInterval(pollInterval);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchActiveChamado();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearInterval(pollInterval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [isOnline, user.uid]);
 
   // Realtime Postgres Changes
@@ -287,31 +301,79 @@ export const MototaxiIncomingRideListener = ({ isOnline }: { isOnline: boolean }
     handleNewCorrida
   );
 
-  // Contingency Broadcast Channel
+  // Contingency Broadcast Channel with bfcache / visibility management
   useEffect(() => {
     if (!isOnline) return;
-    const broadcastChan = supabase
-      .channel("mototaxi_chamados_broadcast")
-      .on("broadcast", { event: "new_chamado" }, ({ payload }) => {
-        if (payload && payload.id) {
-          const originObj = typeof payload.origin === "string" ? JSON.parse(payload.origin) : payload.origin;
-          const destObj = typeof payload.destination === "string" ? JSON.parse(payload.destination) : payload.destination;
-          setChamado({
-            id: payload.id,
-            type: payload.type || "carona",
-            origin: originObj?.address || (typeof originObj === "string" ? originObj : "Origem"),
-            destination: destObj?.address || (typeof destObj === "string" ? destObj : "Destino"),
-            distanceKm: Number(payload.distance_km || 0),
-            durationMin: Number(payload.duration_min || 0),
-            price: Number(payload.estimated_price || 0),
-          });
-          playChamadoSound();
+
+    let broadcastChan: any = null;
+
+    const setupBroadcast = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
+      if (broadcastChan) {
+        try {
+          supabase.removeChannel(broadcastChan);
+        } catch { /* noop */ }
+      }
+      broadcastChan = supabase
+        .channel("mototaxi_chamados_broadcast")
+        .on("broadcast", { event: "new_chamado" }, ({ payload }) => {
+          if (payload && payload.id) {
+            const originObj = typeof payload.origin === "string" ? JSON.parse(payload.origin) : payload.origin;
+            const destObj = typeof payload.destination === "string" ? JSON.parse(payload.destination) : payload.destination;
+            setChamado({
+              id: payload.id,
+              type: payload.type || "carona",
+              origin: originObj?.address || (typeof originObj === "string" ? originObj : "Origem"),
+              destination: destObj?.address || (typeof destObj === "string" ? destObj : "Destino"),
+              distanceKm: Number(payload.distance_km || 0),
+              durationMin: Number(payload.duration_min || 0),
+              price: Number(payload.estimated_price || 0),
+            });
+            playChamadoSound();
+          }
+        })
+        .subscribe();
+    };
+
+    setupBroadcast();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        if (broadcastChan) {
+          try {
+            supabase.removeChannel(broadcastChan);
+          } catch { /* noop */ }
+          broadcastChan = null;
         }
-      })
-      .subscribe();
+      } else if (document.visibilityState === "visible") {
+        setupBroadcast();
+      }
+    };
+
+    const handlePageHide = () => {
+      if (broadcastChan) {
+        try {
+          supabase.removeChannel(broadcastChan);
+        } catch { /* noop */ }
+        broadcastChan = null;
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("pageshow", setupBroadcast);
 
     return () => {
-      supabase.removeChannel(broadcastChan);
+      if (broadcastChan) {
+        try {
+          supabase.removeChannel(broadcastChan);
+        } catch { /* noop */ }
+      }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("pageshow", setupBroadcast);
     };
   }, [isOnline]);
 

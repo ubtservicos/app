@@ -1260,31 +1260,71 @@ const MototaxiTomadorPage = () => {
 
   useEffect(() => {
     if (!state.rideId) return;
-    const channel = supabase.channel(`ride_msg_${state.rideId}`);
-    channel
-      .on('broadcast', { event: 'quick_message' }, ({ payload }) => {
-        if (payload?.from === 'prestador') {
-          setState((prev) => ({
-            ...prev,
-            messages: [...(prev.messages || []), payload]
-          }));
-          if (payload?.text) {
-            setIncomingMessage({
-              text: payload.text,
-              sender: 'Motorista',
-            });
+
+    let channel: any = null;
+
+    const setupMsgChannel = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch { /* noop */ }
+      }
+      channel = supabase.channel(`ride_msg_${state.rideId}`);
+      channel
+        .on('broadcast', { event: 'quick_message' }, ({ payload }) => {
+          if (payload?.from === 'prestador') {
+            setState((prev) => ({
+              ...prev,
+              messages: [...(prev.messages || []), payload]
+            }));
+            if (payload?.text) {
+              setIncomingMessage({
+                text: payload.text,
+                sender: 'Motorista',
+              });
+            }
           }
+        })
+        .subscribe((status: string) => {
+          if (status === 'SUBSCRIBED') {
+            msgChannelRef.current = channel;
+          }
+        });
+    };
+
+    setupMsgChannel();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        if (channel) {
+          try { supabase.removeChannel(channel); } catch { /* noop */ }
+          channel = null;
+          msgChannelRef.current = null;
         }
-      })
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          msgChannelRef.current = channel;
-        }
-      });
+      } else if (document.visibilityState === "visible") {
+        setupMsgChannel();
+      }
+    };
+
+    const handlePageHide = () => {
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch { /* noop */ }
+        channel = null;
+        msgChannelRef.current = null;
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("pageshow", setupMsgChannel);
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch { /* noop */ }
+      }
       msgChannelRef.current = null;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("pageshow", setupMsgChannel);
     };
   }, [state.rideId]);
 
@@ -1370,9 +1410,12 @@ const MototaxiTomadorPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.origin, state.destination]);
 
-  // Buscar motoristas online em tempo real com polling de contingência
+  // Buscar motoristas online em tempo real com polling de contingência e suporte a bfcache
   useEffect(() => {
+    let channel: any = null;
+
     const fetchOnlineDrivers = async () => {
+      if (typeof document !== "undefined" && document.hidden) return;
       const { data, error } = await supabase
         .from('mototaxi_sessoes')
         .select('*')
@@ -1385,28 +1428,67 @@ const MototaxiTomadorPage = () => {
     fetchOnlineDrivers();
     const pollInterval = setInterval(fetchOnlineDrivers, 3000);
 
-    const channel = supabase
-      .channel('mototaxi_sessoes_changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'mototaxi_sessoes' },
-        () => {
-          fetchOnlineDrivers();
+    const setupSessionChannel = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch { /* noop */ }
+      }
+      channel = supabase
+        .channel('mototaxi_sessoes_changes')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'mototaxi_sessoes' },
+          () => {
+            fetchOnlineDrivers();
+          }
+        )
+        .subscribe();
+    };
+
+    setupSessionChannel();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        if (channel) {
+          try { supabase.removeChannel(channel); } catch { /* noop */ }
+          channel = null;
         }
-      )
-      .subscribe();
+      } else if (document.visibilityState === "visible") {
+        fetchOnlineDrivers();
+        setupSessionChannel();
+      }
+    };
+
+    const handlePageHide = () => {
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch { /* noop */ }
+        channel = null;
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("pageshow", setupSessionChannel);
 
     return () => {
       clearInterval(pollInterval);
-      supabase.removeChannel(channel);
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch { /* noop */ }
+      }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("pageshow", setupSessionChannel);
     };
   }, []);
 
-  // Escuta atualizações da corrida em tempo real com polling contínuo de 2s
+  // Escuta atualizações da corrida em tempo real com polling contínuo de 2s e suporte a bfcache
   useEffect(() => {
     if (!state.rideId) return;
 
+    let channel: any = null;
+
     const syncCurrentStatus = async () => {
+      if (typeof document !== "undefined" && document.hidden) return;
       const { data: dbRide, error } = await supabase
         .from('mototaxi_corridas')
         .select('*')
@@ -1460,66 +1542,102 @@ const MototaxiTomadorPage = () => {
     syncCurrentStatus();
     const pollInterval = setInterval(syncCurrentStatus, 2000);
 
-    const channel = supabase
-      .channel(`ride_status_${state.rideId}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'mototaxi_corridas', filter: `id=eq.${state.rideId}` },
-        async (payload: any) => {
-          if (payload.new) {
-            const dbRide = payload.new;
-            if (dbRide.status === 'accepted') {
-              let prestadorInfo = null;
-              if (dbRide.prestador_id) {
-                const { data: userData } = await supabase
-                  .from('usuarios')
-                  .select('nome')
-                  .eq('id', dbRide.prestador_id)
-                  .single();
+    const setupStatusChannel = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch { /* noop */ }
+      }
+      channel = supabase
+        .channel(`ride_status_${state.rideId}`)
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'mototaxi_corridas', filter: `id=eq.${state.rideId}` },
+          async (payload: any) => {
+            if (payload.new) {
+              const dbRide = payload.new;
+              if (dbRide.status === 'accepted') {
+                let prestadorInfo = null;
+                if (dbRide.prestador_id) {
+                  const { data: userData } = await supabase
+                    .from('usuarios')
+                    .select('nome')
+                    .eq('id', dbRide.prestador_id)
+                    .single();
 
-                const { data: sessData } = await supabase
-                  .from('mototaxi_sessoes')
-                  .select('lat, lng')
-                  .eq('prestador_id', dbRide.prestador_id)
-                  .single();
+                  const { data: sessData } = await supabase
+                    .from('mototaxi_sessoes')
+                    .select('lat, lng')
+                    .eq('prestador_id', dbRide.prestador_id)
+                    .single();
 
-                prestadorInfo = {
-                  name: userData?.nome || 'Motorista UBT',
-                  photo: '',
-                  plate: 'MTX-' + dbRide.prestador_id.slice(0, 4).toUpperCase(),
-                  rating: 4.8
-                };
+                  prestadorInfo = {
+                    name: userData?.nome || 'Motorista UBT',
+                    photo: '',
+                    plate: 'MTX-' + dbRide.prestador_id.slice(0, 4).toUpperCase(),
+                    rating: 4.8
+                  };
 
+                  setState({
+                    status: 'accepted',
+                    acceptedAt: dbRide.accepted_at ? new Date(dbRide.accepted_at).getTime() : Date.now(),
+                    prestadorInfo,
+                    prestadorLocation: sessData ? { lat: Number(sessData.lat), lng: Number(sessData.lng) } : (state.origin ? { lat: state.origin.lat - 0.005, lng: state.origin.lng - 0.005 } : null)
+                  });
+                }
+              } else if (dbRide.status === 'in_progress') {
+                setState({ status: 'in_progress' });
+              } else if (dbRide.status === 'completed') {
                 setState({
-                  status: 'accepted',
-                  acceptedAt: dbRide.accepted_at ? new Date(dbRide.accepted_at).getTime() : Date.now(),
-                  prestadorInfo,
-                  prestadorLocation: sessData ? { lat: Number(sessData.lat), lng: Number(sessData.lng) } : (state.origin ? { lat: state.origin.lat - 0.005, lng: state.origin.lng - 0.005 } : null)
+                  status: 'completed',
+                  finalPrice: dbRide.final_price || dbRide.estimated_price
                 });
+              } else if (dbRide.status === 'cancelled') {
+                alert('A corrida foi cancelada.');
+                resetRide();
               }
-            } else if (dbRide.status === 'in_progress') {
-              setState({ status: 'in_progress' });
-            } else if (dbRide.status === 'completed') {
-              setState({
-                status: 'completed',
-                finalPrice: dbRide.final_price || dbRide.estimated_price
-              });
-            } else if (dbRide.status === 'cancelled') {
-              alert('A corrida foi cancelada.');
-              resetRide();
             }
           }
+        )
+        .subscribe();
+    };
+
+    setupStatusChannel();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        if (channel) {
+          try { supabase.removeChannel(channel); } catch { /* noop */ }
+          channel = null;
         }
-      )
-      .subscribe();
+      } else if (document.visibilityState === "visible") {
+        syncCurrentStatus();
+        setupStatusChannel();
+      }
+    };
+
+    const handlePageHide = () => {
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch { /* noop */ }
+        channel = null;
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("pageshow", setupStatusChannel);
 
     return () => {
       clearInterval(pollInterval);
-      supabase.removeChannel(channel);
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch { /* noop */ }
+      }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("pageshow", setupStatusChannel);
     };
   }, [state.rideId]);
 
-  // Escuta a localização em tempo real do prestador aceito e em andamento
+  // Escuta a localização em tempo real do prestador aceito e em andamento com suporte a bfcache
   useEffect(() => {
     if ((state.status !== 'accepted' && state.status !== 'in_progress') || !state.prestadorInfo || !state.rideId) return;
 
@@ -1527,6 +1645,7 @@ const MototaxiTomadorPage = () => {
     let channel: any = null;
 
     const fetchAndSubscribePrestadorLoc = async () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
       const { data: dbRide } = await supabase
         .from('mototaxi_corridas')
         .select('prestador_id')
@@ -1544,6 +1663,10 @@ const MototaxiTomadorPage = () => {
 
         if (sessData) {
           setState({ prestadorLocation: { lat: Number(sessData.lat), lng: Number(sessData.lng) } });
+        }
+
+        if (channel) {
+          try { supabase.removeChannel(channel); } catch { /* noop */ }
         }
 
         channel = supabase
@@ -1604,8 +1727,35 @@ const MototaxiTomadorPage = () => {
 
     fetchAndSubscribePrestadorLoc();
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        if (channel) {
+          try { supabase.removeChannel(channel); } catch { /* noop */ }
+          channel = null;
+        }
+      } else if (document.visibilityState === "visible") {
+        fetchAndSubscribePrestadorLoc();
+      }
+    };
+
+    const handlePageHide = () => {
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch { /* noop */ }
+        channel = null;
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("pageshow", fetchAndSubscribePrestadorLoc);
+
     return () => {
-      if (channel) supabase.removeChannel(channel);
+      if (channel) {
+        try { supabase.removeChannel(channel); } catch { /* noop */ }
+      }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("pageshow", fetchAndSubscribePrestadorLoc);
     };
   }, [state.status, state.rideId]);
 
