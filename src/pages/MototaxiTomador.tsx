@@ -680,6 +680,11 @@ const CompletedScreen = ({
         console.error("Erro ao sincronizar escolha de pagamento:", e?.message || e);
       }
     }
+
+    // Se for Pix (Scanner ou no Celular), aciona automaticamente a Edge Function para gerar o QR Code real transparente
+    if (m === "pix_scanner" || m === "pix_checkout") {
+      await handleProcessPayment("pix", m);
+    }
   };
 
   // Helper para tokenizar cartão diretamente no Mercado Pago API
@@ -688,7 +693,7 @@ const CompletedScreen = ({
       import.meta.env.VITE_MERCADOPAGO_PUBLIC_KEY ||
       import.meta.env.VITE_MERCADO_PAGO_PUBLIC_KEY;
 
-    if (!mpPublicKey || mpPublicKey.trim() === "" || mpPublicKey === "undefined") {
+    if (!mpPublicKey || !mpPublicKey.trim() || mpPublicKey.trim() === "undefined") {
       console.error("VITE_MERCADOPAGO_PUBLIC_KEY não está configurada ou é inválida no ambiente.");
       return null;
     }
@@ -728,7 +733,7 @@ const CompletedScreen = ({
   };
 
   // Direct fetch to payment-gateway Edge Function (unmasking 400 details)
-  const handleProcessPayment = async (paymentType: "pix" | "card") => {
+  const handleProcessPayment = async (paymentType: "pix" | "card", targetMethod?: PaymentMethodOption) => {
     setIsLoading(true);
     setPaymentError(null);
     const finalAmount = Number(feeCalc.totalAmount.toFixed(2));
@@ -814,6 +819,32 @@ const CompletedScreen = ({
         setQrCodeBase64(data.pix.qr_code_base64);
         if (data.pix.qr_code) {
           setPixCopiaCola(data.pix.qr_code);
+        }
+
+        // Se o método for Pix Scanner, transmite os dados do QR code gerado para a tela do motorista via Realtime
+        const currentMethod = targetMethod || method;
+        if (currentMethod === "pix_scanner" && rideId) {
+          try {
+            const channel = supabase
+              .channel(`ride_msg_${rideId}`)
+              .on("broadcast", { event: "pix_qr_ready" }, () => {})
+              .subscribe((status) => {
+                if (status === "SUBSCRIBED") {
+                  channel.send({
+                    type: "broadcast",
+                    event: "pix_qr_ready",
+                    payload: {
+                      rideId,
+                      qr_code_base64: data.pix.qr_code_base64,
+                      qr_code: data.pix.qr_code,
+                      amount: finalAmount,
+                    },
+                  });
+                }
+              });
+          } catch (bErr) {
+            console.warn("Aviso ao transmitir pix_qr_ready:", bErr);
+          }
         }
       } else {
         if (rideId) {
@@ -916,13 +947,13 @@ const CompletedScreen = ({
         Escolha como deseja pagar
       </p>
 
-      {/* 4 DIRECT PAYMENT BUTTONS */}
-      <div className="mt-3 grid grid-cols-2 gap-2.5">
+      {/* 3 DIRECT PAYMENT BUTTONS (Opção Em Dinheiro ocultada temporariamente para testes de Gateway) */}
+      <div className="mt-3 grid grid-cols-3 gap-2.5">
         {/* 1. Pix Scanner */}
         <button
           type="button"
           onClick={() => handleSelectMethod("pix_scanner")}
-          className="rounded-2xl p-3.5 flex flex-col items-start text-left transition-all active:scale-[0.98]"
+          className="rounded-2xl p-3 flex flex-col items-start text-left transition-all active:scale-[0.98]"
           style={{
             background: method === "pix_scanner" ? "rgba(13,184,126,0.15)" : "rgba(255,255,255,0.04)",
             border: method === "pix_scanner" ? "2px solid #0DB87E" : "1px solid rgba(255,255,255,0.08)",
@@ -931,15 +962,15 @@ const CompletedScreen = ({
           <div className="w-8 h-8 rounded-full flex items-center justify-center mb-2" style={{ background: method === "pix_scanner" ? "#0DB87E" : "rgba(255,255,255,0.08)" }}>
             <Scan size={18} className={method === "pix_scanner" ? "text-white" : "text-white/70"} />
           </div>
-          <span className="font-display text-[13px] font-bold">Pix Scanner</span>
-          <span className="font-sans text-[11px] text-white/50 mt-0.5">Ler QR do motorista</span>
+          <span className="font-display text-[12px] font-bold leading-tight">Pix Scanner</span>
+          <span className="font-sans text-[10px] text-white/50 mt-0.5">QR no motorista</span>
         </button>
 
         {/* 2. Pix Checkout */}
         <button
           type="button"
           onClick={() => handleSelectMethod("pix_checkout")}
-          className="rounded-2xl p-3.5 flex flex-col items-start text-left transition-all active:scale-[0.98]"
+          className="rounded-2xl p-3 flex flex-col items-start text-left transition-all active:scale-[0.98]"
           style={{
             background: method === "pix_checkout" ? "rgba(13,184,126,0.15)" : "rgba(255,255,255,0.04)",
             border: method === "pix_checkout" ? "2px solid #0DB87E" : "1px solid rgba(255,255,255,0.08)",
@@ -948,15 +979,15 @@ const CompletedScreen = ({
           <div className="w-8 h-8 rounded-full flex items-center justify-center mb-2" style={{ background: method === "pix_checkout" ? "#0DB87E" : "rgba(255,255,255,0.08)" }}>
             <Smartphone size={18} className={method === "pix_checkout" ? "text-white" : "text-white/70"} />
           </div>
-          <span className="font-display text-[13px] font-bold">Pix no Celular</span>
-          <span className="font-sans text-[11px] text-white/50 mt-0.5">Copia e Cola no app</span>
+          <span className="font-display text-[12px] font-bold leading-tight">Pix Celular</span>
+          <span className="font-sans text-[10px] text-white/50 mt-0.5">Copia e Cola</span>
         </button>
 
         {/* 3. Cartão de Crédito */}
         <button
           type="button"
           onClick={() => handleSelectMethod("card")}
-          className="rounded-2xl p-3.5 flex flex-col items-start text-left transition-all active:scale-[0.98]"
+          className="rounded-2xl p-3 flex flex-col items-start text-left transition-all active:scale-[0.98]"
           style={{
             background: method === "card" ? "rgba(13,184,126,0.15)" : "rgba(255,255,255,0.04)",
             border: method === "card" ? "2px solid #0DB87E" : "1px solid rgba(255,255,255,0.08)",
@@ -965,11 +996,11 @@ const CompletedScreen = ({
           <div className="w-8 h-8 rounded-full flex items-center justify-center mb-2" style={{ background: method === "card" ? "#0DB87E" : "rgba(255,255,255,0.08)" }}>
             <CreditCard size={18} className={method === "card" ? "text-white" : "text-white/70"} />
           </div>
-          <span className="font-display text-[13px] font-bold">Cartão de Crédito</span>
-          <span className="font-sans text-[11px] text-white/50 mt-0.5">Split UBT seguro</span>
+          <span className="font-display text-[12px] font-bold leading-tight">Cartão</span>
+          <span className="font-sans text-[10px] text-white/50 mt-0.5">Crédito online</span>
         </button>
 
-        {/* 4. Em Dinheiro */}
+        {/* 4. Em Dinheiro (Oculto temporariamente para testes do checkout transparente)
         <button
           type="button"
           onClick={() => handleSelectMethod("cash")}
@@ -985,18 +1016,40 @@ const CompletedScreen = ({
           <span className="font-display text-[13px] font-bold">Em Dinheiro</span>
           <span className="font-sans text-[11px] text-white/50 mt-0.5">Pagamento presencial</span>
         </button>
+        */}
       </div>
 
       {/* METHOD CONTENT 1: PIX SCANNER */}
       {method === "pix_scanner" && (
-        <div className="mt-4 rounded-2xl p-5 bg-white/5 border border-white/10 text-center">
+        <div className="mt-4 rounded-2xl p-5 bg-white/5 border border-white/10 text-center flex flex-col items-center">
           <div className="w-14 h-14 mx-auto rounded-full bg-[#0DB87E]/20 border border-[#0DB87E]/40 flex items-center justify-center mb-3">
             <Scan size={28} className="text-[#0DB87E]" />
           </div>
           <h3 className="font-display text-[16px] font-bold text-white">QR Code no celular do motorista</h3>
-          <p className="font-sans text-[13px] text-white/70 mt-1.5 leading-relaxed">
-            O motorista está exibindo o QR Code na tela dele. Abra o aplicativo do seu banco, escolha <strong>Pix &gt; Ler QR Code</strong> e aponte a câmera.
-          </p>
+          
+          {isLoading ? (
+            <div className="my-4 py-4 flex flex-col items-center justify-center">
+              <span className="w-8 h-8 rounded-full border-2 border-[#0DB87E] border-t-transparent animate-spin mb-2" />
+              <p className="font-sans text-[13px] text-white/70">Gerando cobrança Pix transparente no Mercado Pago...</p>
+            </div>
+          ) : (
+            <>
+              <p className="font-sans text-[13px] text-white/70 mt-1.5 leading-relaxed">
+                O QR Code gerado pelo Mercado Pago já foi enviado para a tela do motorista. Abra o aplicativo do seu banco, escolha <strong>Pix &gt; Ler QR Code</strong> e aponte a câmera.
+              </p>
+              {pixCopiaCola && (
+                <button
+                  type="button"
+                  onClick={handleCopyPix}
+                  className="mt-3 w-full py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-white font-sans text-[12px] flex items-center justify-center gap-2 active:scale-98 transition-all"
+                >
+                  {copiedPix ? <Check size={14} className="text-[#0DB87E]" /> : <Copy size={14} />}
+                  {copiedPix ? "Código Pix Copiado!" : "Ou copiar código Copia e Cola"}
+                </button>
+              )}
+            </>
+          )}
+
           <button
             type="button"
             onClick={handleConfirmManualPaid}
@@ -1010,9 +1063,14 @@ const CompletedScreen = ({
       {/* METHOD CONTENT 2: PIX CHECKOUT (NO CELULAR) */}
       {method === "pix_checkout" && (
         <div className="mt-4 rounded-2xl p-5 flex flex-col items-center bg-white/5 border border-white/10">
-          {qrCodeBase64 ? (
+          {isLoading ? (
+            <div className="w-44 h-44 rounded-xl flex flex-col items-center justify-center mb-3 bg-white/5 border border-white/10">
+              <span className="w-8 h-8 rounded-full border-2 border-[#0DB87E] border-t-transparent animate-spin mb-3" />
+              <p className="font-sans text-[12px] text-white/70 text-center px-2">Gerando Pix no Mercado Pago...</p>
+            </div>
+          ) : qrCodeBase64 ? (
             <div className="bg-white p-2.5 rounded-xl mb-3 shadow-lg">
-              <img src={`data:image/png;base64,${qrCodeBase64}`} alt="QR Code PIX" className="w-44 h-44" />
+              <img src={`data:image/png;base64,${qrCodeBase64}`} alt="QR Code PIX" className="w-44 h-44 object-contain" />
             </div>
           ) : (
             <div className="w-44 h-44 rounded-xl flex flex-col items-center justify-center mb-3 bg-white/5 border border-white/10">
@@ -1020,7 +1078,7 @@ const CompletedScreen = ({
               <button
                 type="button"
                 disabled={isLoading}
-                onClick={() => handleProcessPayment("pix")}
+                onClick={() => handleProcessPayment("pix", "pix_checkout")}
                 className="px-4 py-2 rounded-lg bg-[#0DB87E] text-white font-sans text-[12px] font-semibold active:scale-95 transition-all"
               >
                 {isLoading ? "Gerando Pix..." : "Gerar QR Code Pix"}
@@ -1028,7 +1086,7 @@ const CompletedScreen = ({
             </div>
           )}
 
-          {pixCopiaCola && (
+          {pixCopiaCola && !isLoading && (
             <div className="w-full mt-2">
               <button
                 type="button"

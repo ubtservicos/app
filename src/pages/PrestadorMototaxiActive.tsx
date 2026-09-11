@@ -66,6 +66,9 @@ const PrestadorMototaxiActive = () => {
   const [paymentMethodSelected, setPaymentMethodSelected] = useState<string | null>(null);
   const [copiedPix, setCopiedPix] = useState(false);
   const [isConfirmingCash, setIsConfirmingCash] = useState(false);
+  const [pixQrBase64, setPixQrBase64] = useState<string>("");
+  const [pixCopiaColaCode, setPixCopiaColaCode] = useState<string>("");
+  const [isPixLoading, setIsPixLoading] = useState<boolean>(false);
   const msgChannelRef = useRef<any>(null);
 
   useEffect(() => {
@@ -92,7 +95,28 @@ const PrestadorMototaxiActive = () => {
         .on('broadcast', { event: 'payment_method_selected' }, ({ payload }) => {
           console.log('Método de pagamento selecionado pelo passageiro:', payload);
           if (payload?.method || payload?.dbMethod) {
-            setPaymentMethodSelected(payload.method || payload.dbMethod);
+            const chosen = payload.method || payload.dbMethod;
+            setPaymentMethodSelected(chosen);
+            if (chosen === "pix_scanner" && !payload?.qr_code_base64) {
+              setIsPixLoading(true);
+            }
+          }
+          if (payload?.qr_code_base64) {
+            setPixQrBase64(payload.qr_code_base64);
+            setIsPixLoading(false);
+          }
+          if (payload?.qr_code) {
+            setPixCopiaColaCode(payload.qr_code);
+          }
+        })
+        .on('broadcast', { event: 'pix_qr_ready' }, ({ payload }) => {
+          console.log('QR Code Pix dinâmico recebido da API:', payload);
+          if (payload?.qr_code_base64) {
+            setPixQrBase64(payload.qr_code_base64);
+            setIsPixLoading(false);
+          }
+          if (payload?.qr_code) {
+            setPixCopiaColaCode(payload.qr_code);
           }
         })
         .subscribe((status: string) => {
@@ -511,16 +535,30 @@ const PrestadorMototaxiActive = () => {
                 <p className="font-sans text-[12px] text-white/70 mt-1 mb-3">
                   Apresente este QR Code para o passageiro ler no aplicativo do banco dele:
                 </p>
-                <div className="bg-white p-3.5 rounded-2xl shadow-2xl">
-                  <QRCodeSVG value={pixPayload} size={180} level="M" />
-                </div>
+
+                {isPixLoading || (!pixQrBase64 && !pixCopiaColaCode) ? (
+                  <div className="w-[180px] h-[180px] rounded-2xl bg-white/5 border border-white/10 flex flex-col items-center justify-center p-4">
+                    <span className="w-8 h-8 rounded-full border-2 border-[#0DB87E] border-t-transparent animate-spin mb-3" />
+                    <p className="font-sans text-[12px] text-white/70 text-center">Gerando QR Code no Mercado Pago...</p>
+                  </div>
+                ) : pixQrBase64 ? (
+                  <div className="bg-white p-3.5 rounded-2xl shadow-2xl">
+                    <img src={`data:image/png;base64,${pixQrBase64}`} alt="QR Code Pix Dinâmico" className="w-[180px] h-[180px] object-contain mx-auto" />
+                  </div>
+                ) : (
+                  <div className="bg-white p-3.5 rounded-2xl shadow-2xl">
+                    <QRCodeSVG value={pixCopiaColaCode || pixPayload} size={180} level="M" />
+                  </div>
+                )}
+
                 <p className="mt-3 font-display text-[20px] font-bold text-[#0DB87E]">
                   {formatBRL(ride.price || 0)}
                 </p>
                 <button
                   type="button"
                   onClick={() => {
-                    navigator.clipboard.writeText(pixPayload);
+                    const codeToCopy = pixCopiaColaCode || pixPayload;
+                    navigator.clipboard.writeText(codeToCopy);
                     setCopiedPix(true);
                     setTimeout(() => setCopiedPix(false), 3000);
                   }}
