@@ -286,12 +286,12 @@ async function createMercadoPagoPayment({
   // Unique idempotency key per attempt
   const idempotencyKey = crypto.randomUUID();
 
-  const mpPayload = {
+  const isCard = paymentMethodId !== "pix" || Boolean(cardToken);
+
+  const mpPayload: Record<string, unknown> = {
     transaction_amount: transactionAmount,
     description,
-    payment_method_id: paymentMethodId,
-    ...(paymentMethodId !== "pix" && cardToken ? { token: cardToken } : {}),
-    ...(paymentMethodId !== "pix" ? { installments } : {}),
+    payment_method_id: paymentMethodId || "master",
     payer: {
       email: payerEmail,
       ...(payerFirstName && { first_name: payerFirstName }),
@@ -308,6 +308,14 @@ async function createMercadoPagoPayment({
     ...(externalReference ? { external_reference: externalReference } : {}),
     ...(metadata ? { metadata } : {}),
   };
+
+  // INJEÇÃO OBRIGATÓRIA DO TOKEN PARA O MERCADO PAGO (/v1/payments):
+  if (cardToken) {
+    mpPayload.token = cardToken;
+  }
+  if (isCard) {
+    mpPayload.installments = Number(installments) || 1;
+  }
 
   const mpResponse = await fetch("https://api.mercadopago.com/v1/payments", {
     method: "POST",
@@ -384,7 +392,8 @@ serve(async (req: Request): Promise<Response> => {
       const provider_id = body.provider_id || "0a5edf64-7585-401f-b310-126529607da0";
       const provider_name = body.provider_name || "Silvina Luz";
       const metadata = body.metadata || {};
-      const cardToken = body.token || body.card_token;
+      const cardToken = body.token || body.card_token || body.card_token_id || body.cardToken || body.cardTokenId;
+      console.log(`[payment-gateway] Extracted cardToken:`, cardToken ? `${cardToken.slice(0, 8)}... (${cardToken.length} chars)` : "NONE");
       const installments = Number(body.installments) || 1;
 
       // 1. Basic Validations
