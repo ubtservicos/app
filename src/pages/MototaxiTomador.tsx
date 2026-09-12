@@ -780,7 +780,7 @@ const CompletedScreen = ({
       const session = (await supabase.auth.getSession()).data.session;
       const token = session?.access_token || anonKey;
 
-      const payload = {
+      const payloadParaEdge = {
         action: "create_payment_intent",
         service_type: "mototaxi",
         service_id: rideId || "00000000-0000-0000-0000-000000000001",
@@ -793,8 +793,10 @@ const CompletedScreen = ({
         payer_last_name: (cardHolder || user?.name || "Santander").split(" ").slice(1).join(" ") || "Santander",
         description: `Corrida UBT Mototáxi - ${formatBRL(finalAmount)} (Split 7 Vias)`,
         payment_method_id: paymentMethodId,
+        // INJEÇÃO OBRIGATÓRIA DO TOKEN AQUI:
         token: cardToken,
         card_token: cardToken,
+        card_token_id: cardToken,
         card_data: paymentType === "card" ? {
           number: cardClean,
           cardholder_name: cardHolder || "Felipe Santander",
@@ -804,7 +806,7 @@ const CompletedScreen = ({
         } : undefined,
       };
 
-      console.log("PAYLOAD COMPLETO PARA EDGE:", payload);
+      console.log("PAYLOAD COMPLETO PARA EDGE (COM TOKEN):", payloadParaEdge);
 
       const res = await fetch(`${supabaseUrl}/functions/v1/payment-gateway`, {
         method: "POST",
@@ -813,7 +815,7 @@ const CompletedScreen = ({
           "apikey": anonKey,
           "Authorization": `Bearer ${token}`,
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payloadParaEdge),
       });
 
       const data = await res.json().catch(() => ({}));
