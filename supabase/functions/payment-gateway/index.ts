@@ -328,11 +328,16 @@ async function createMercadoPagoPayment({
   });
 
   const rawText = await mpResponse.text();
-  let data: MercadoPagoPixResponse;
+  let data: any;
   try {
     data = JSON.parse(rawText);
   } catch (parseErr) {
     throw new Error(`Invalid JSON from MP (Status ${mpResponse.status}): ${rawText}`);
+  }
+
+  if (mpResponse.status >= 400 || data?.error) {
+    console.error(`[payment-gateway] MP Error (Status ${mpResponse.status}):`, rawText);
+    throw new Error("MP API Error: " + JSON.stringify(data));
   }
 
   return { data, httpStatus: mpResponse.status };
@@ -368,8 +373,7 @@ serve(async (req: Request): Promise<Response> => {
       );
     }
 
-    const action = body.action || "create_payment_intent";
-    console.log(`[payment-gateway] Handling action="${action}", body:`, JSON.stringify(body));
+    console.log("RAW REQ BODY:", JSON.stringify(body));
 
     // ----------------------------------------------------------------
     // ROUTE: Payment Intent / Checkout (with Split)

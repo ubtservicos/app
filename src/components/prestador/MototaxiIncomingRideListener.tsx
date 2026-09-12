@@ -106,6 +106,14 @@ export const parseChamadoData = (c: any): Chamado | null => {
   }
 };
 
+const isDevOrHomolog =
+  import.meta.env.DEV ||
+  (typeof window !== "undefined" && (
+    window.location.hostname.includes("vercel.app") ||
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1"
+  ));
+
 export const ChamadoModal = ({
   chamado,
   onAccept,
@@ -123,6 +131,10 @@ export const ChamadoModal = ({
   const calculateRemaining = useCallback(() => {
     if (!chamado?.createdAt) return 60;
     const elapsed = Math.floor((Date.now() - new Date(chamado.createdAt).getTime()) / 1000);
+    if (isDevOrHomolog) {
+      // In dev/homologation, bypass auto-expirations so testing is uninterrupted
+      return Math.max(10, 60 - (isNaN(elapsed) ? 0 : (elapsed % 60)));
+    }
     return Math.max(0, 60 - (isNaN(elapsed) ? 0 : elapsed));
   }, [chamado?.createdAt]);
 
@@ -293,12 +305,13 @@ export const MototaxiIncomingRideListener = ({ isOnline }: { isOnline: boolean }
     const fetchActiveChamado = async () => {
       if (typeof document !== "undefined" && document.hidden) return;
       try {
-        const sixtySecsAgo = new Date(Date.now() - 60000).toISOString();
+        const timeLimitMs = isDevOrHomolog ? 15 * 60 * 1000 : 60000;
+        const timeLimitIso = new Date(Date.now() - timeLimitMs).toISOString();
         const { data, error } = await supabase
           .from("mototaxi_corridas")
           .select("*")
           .in("status", ["searching", "pending", "buscando", "solicitado"])
-          .gte("created_at", sixtySecsAgo)
+          .gte("created_at", timeLimitIso)
           .or(`prestador_id.is.null,prestador_id.eq.${user.uid}`)
           .order("created_at", { ascending: false })
           .limit(1);
@@ -349,8 +362,9 @@ export const MototaxiIncomingRideListener = ({ isOnline }: { isOnline: boolean }
     const c = payload.new;
     const isPending = c && ["searching", "pending", "buscando", "solicitado"].includes(c.status);
     const isTargetPrestador = c && (!c.prestador_id || c.prestador_id === user.uid);
+    const timeLimitMs = isDevOrHomolog ? 15 * 60 * 1000 : 60000;
     const isRecent = c?.created_at
-      ? Date.now() - new Date(c.created_at).getTime() <= 60000
+      ? Date.now() - new Date(c.created_at).getTime() <= timeLimitMs
       : true;
 
     if (c && isPending && isTargetPrestador && isRecent) {

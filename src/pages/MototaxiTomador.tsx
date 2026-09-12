@@ -808,25 +808,19 @@ const CompletedScreen = ({
 
       console.log("PAYLOAD COMPLETO PARA EDGE (COM TOKEN):", payloadParaEdge);
 
-      const res = await fetch(`${supabaseUrl}/functions/v1/payment-gateway`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "apikey": anonKey,
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify(payloadParaEdge),
+      const { data, error: invokeError } = await supabase.functions.invoke("payment-gateway", {
+        body: payloadParaEdge,
       });
 
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok || data.error) {
-        const errMain = data.error || `Erro ${res.status}: Pagamento rejeitado pelo gateway`;
+      if (invokeError || !data || data.error) {
+        const errMain = data?.error || invokeError?.message || "Pagamento rejeitado pelo gateway";
         let errDetails = "";
-        if (data.details) {
+        if (data?.details) {
           errDetails = typeof data.details === "object" ? JSON.stringify(data.details) : String(data.details);
-        } else if (data.detail) {
+        } else if (data?.detail) {
           errDetails = data.detail;
+        } else if (data?.message) {
+          errDetails = data.message;
         }
         throw new Error(errDetails ? `${errMain} (${errDetails})` : errMain);
       }

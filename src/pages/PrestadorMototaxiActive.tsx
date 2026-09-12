@@ -35,6 +35,8 @@ interface ActiveRide {
   originCoords?: { lat: number; lng: number };
   destinationCoords?: { lat: number; lng: number };
   paymentMethod?: string;
+  startTime?: number | string;
+  created_at?: string;
 }
 
 const Sheet = ({ children }: { children: React.ReactNode }) => (
@@ -239,6 +241,8 @@ const PrestadorMototaxiActive = () => {
             originCoords: { lat: Number(originObj?.lat || UBATUBA.lat), lng: Number(originObj?.lng || UBATUBA.lng) },
             destinationCoords: { lat: Number(destObj?.lat || UBATUBA.lat), lng: Number(destObj?.lng || UBATUBA.lng) },
             paymentMethod: data.payment_method,
+            startTime: data.created_at ? new Date(data.created_at).getTime() : Date.now(),
+            created_at: data.created_at,
           });
           if (data.payment_method) {
             setPaymentMethodSelected(data.payment_method);
@@ -261,7 +265,13 @@ const PrestadorMototaxiActive = () => {
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
-        loadRideFromDb(parsed.id);
+        if (parsed && parsed.id) {
+          setRide((prev) => prev || {
+            ...parsed,
+            startTime: parsed.startTime || (parsed.created_at ? new Date(parsed.created_at).getTime() : Date.now()),
+          });
+          loadRideFromDb(parsed.id);
+        }
       } catch { /* noop */ }
     } else {
       // fallback
@@ -274,7 +284,8 @@ const PrestadorMototaxiActive = () => {
         durationMin: 11,
         price: 12.5,
         originCoords: ORIGIN,
-        destinationCoords: DESTINATION
+        destinationCoords: DESTINATION,
+        startTime: Date.now(),
       });
     }
   }, []);
