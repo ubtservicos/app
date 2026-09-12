@@ -688,63 +688,63 @@ const CompletedScreen = ({
   };
 
   // Helper para tokenizar cartão diretamente no Mercado Pago API
-  const tokenizeCard = async (cleanNum: string, name: string, expMonth: number, expYear: number, cvv: string): Promise<string | null> => {
+  const tokenizeCard = async (cleanNum: string, name: string, expMonth: number, expYear: number, cvv: string): Promise<string> => {
     const mpPublicKey =
       import.meta.env.VITE_MERCADOPAGO_PUBLIC_KEY ||
       import.meta.env.VITE_MERCADO_PAGO_PUBLIC_KEY;
 
     if (!mpPublicKey || !mpPublicKey.trim() || mpPublicKey.trim() === "undefined") {
-      console.error("VITE_MERCADOPAGO_PUBLIC_KEY não está configurada ou é inválida no ambiente.");
-      return null;
+      throw new Error("Chave pública do Mercado Pago (VITE_MERCADOPAGO_PUBLIC_KEY) não está configurada no ambiente.");
     }
 
-    try {
-      const cleanKey = mpPublicKey.trim();
-      const payload = {
-        cardNumber: cleanNum,
-        card_number: cleanNum,
-        cardholder: {
-          name: name || "APRO TEST USER",
-          identification: {
-            type: "CPF",
-            number: "19119119100",
-          },
+    const cleanKey = mpPublicKey.trim();
+    const payload = {
+      cardNumber: cleanNum,
+      card_number: cleanNum,
+      cardholder: {
+        name: name || "APRO TEST USER",
+        identification: {
+          type: "CPF",
+          number: "19119119100",
         },
-        cardExpirationMonth: expMonth,
-        card_expiration_month: expMonth,
-        expiration_month: expMonth,
-        cardExpirationYear: expYear,
-        card_expiration_year: expYear,
-        expiration_year: expYear,
-        securityCode: cvv || "123",
-        security_code: cvv || "123",
-      };
+      },
+      cardExpirationMonth: expMonth,
+      card_expiration_month: expMonth,
+      expiration_month: expMonth,
+      cardExpirationYear: expYear,
+      card_expiration_year: expYear,
+      expiration_year: expYear,
+      securityCode: cvv || "123",
+      security_code: cvv || "123",
+    };
 
-      console.log("[MercadoPago Tokenize] Enviando payload para /v1/card_tokens:", {
-        ...payload,
-        cardNumber: `***${cleanNum.slice(-4)}`,
-        card_number: `***${cleanNum.slice(-4)}`,
-      });
+    console.log("[MercadoPago Tokenize] Enviando payload para /v1/card_tokens:", {
+      ...payload,
+      cardNumber: `***${cleanNum.slice(-4)}`,
+      card_number: `***${cleanNum.slice(-4)}`,
+    });
 
-      const res = await fetch(`https://api.mercadopago.com/v1/card_tokens?public_key=${encodeURIComponent(cleanKey)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+    const res = await fetch(`https://api.mercadopago.com/v1/card_tokens?public_key=${encodeURIComponent(cleanKey)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
-      const data = await res.json().catch(() => ({}));
-      console.log("[MercadoPago Tokenize] Resposta MP:", res.status, data);
+    const data = await res.json().catch(() => ({}));
+    console.log("[MercadoPago Tokenize] Resposta MP:", res.status, data);
 
-      if (res.ok && data?.id) {
-        return data.id;
-      } else {
-        console.error("Erro na tokenização Mercado Pago (Status " + res.status + "):", data);
-        return null;
-      }
-    } catch (tokenErr) {
-      console.error("Falha ao tokenizar cartão via MP API:", tokenErr);
-      return null;
+    if (res.ok && data?.id) {
+      return data.id;
     }
+
+    const errMessage =
+      data?.message ||
+      (Array.isArray(data?.cause) && data.cause[0]?.description) ||
+      data?.error ||
+      `Erro ${res.status} ao tokenizar cartão no Mercado Pago`;
+
+    console.error("Erro na tokenização Mercado Pago (Status " + res.status + "):", data);
+    throw new Error(`Falha na tokenização do cartão: ${errMessage}`);
   };
 
   // Direct fetch to payment-gateway Edge Function (unmasking 400 details)
@@ -769,10 +769,8 @@ const CompletedScreen = ({
         }
 
         const generatedToken = await tokenizeCard(cardClean, cardHolder, expMonth, expYear, cardCvv);
-        if (!generatedToken) {
-          setIsLoading(false);
-          setPaymentError("Não foi possível validar o cartão no Mercado Pago (Falha de Tokenização). Verifique os dados do cartão e as credenciais configuradas.");
-          return; // STRICT FAIL-FAST: Impede qualquer chamada ao backend se a tokenização falhar
+        if (!generatedToken || typeof generatedToken !== "string" || generatedToken.length < 15) {
+          throw new Error("Token de cartão inválido ou vazio retornado pelo gateway.");
         }
         cardToken = generatedToken;
       }
@@ -797,15 +795,16 @@ const CompletedScreen = ({
         payment_method_id: paymentMethodId,
         token: cardToken,
         card_token: cardToken,
-        card_token_id: cardToken,
         card_data: paymentType === "card" ? {
           number: cardClean,
           cardholder_name: cardHolder || "Felipe Santander",
-          expiration_month: expMonth ? parseInt(expMonth, 10) : 12,
-          expiration_year: expYear ? (expYear.length === 2 ? 2000 + parseInt(expYear, 10) : parseInt(expYear, 10)) : 2028,
+          expiration_month: expMonth,
+          expiration_year: expYear,
           security_code: cardCvv || "123",
         } : undefined,
       };
+
+      console.log("PAYLOAD COMPLETO PARA EDGE:", payload);
 
       const res = await fetch(`${supabaseUrl}/functions/v1/payment-gateway`, {
         method: "POST",
