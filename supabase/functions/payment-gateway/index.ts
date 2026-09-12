@@ -332,12 +332,11 @@ async function createMercadoPagoPayment({
   try {
     data = JSON.parse(rawText);
   } catch (parseErr) {
-    throw new Error(`Invalid JSON from MP (Status ${mpResponse.status}): ${rawText}`);
+    data = { error: "Invalid JSON from MP", raw: rawText };
   }
 
   if (mpResponse.status >= 400 || data?.error) {
-    console.error(`[payment-gateway] MP Error (Status ${mpResponse.status}):`, rawText);
-    throw new Error("MP API Error: " + JSON.stringify(data));
+    console.error(`[payment-gateway] MP Error (Status ${mpResponse.status}):`, JSON.stringify(data));
   }
 
   return { data, httpStatus: mpResponse.status };
@@ -539,14 +538,15 @@ SOMA TOTAL DAS 7 VIAS: R$ ${sumNominal.toFixed(2)} (100.0%)
       });
 
       // --- [6] Handle MP API errors ---
-      if (mpStatus >= 400 || mpData.error) {
-        console.error("[payment-gateway] Mercado Pago returned error:", mpStatus, mpData);
+      if (mpStatus >= 400 || mpData?.error) {
+        console.error(`[payment-gateway] MP Error (Status ${mpStatus}):`, JSON.stringify(mpData));
         return new Response(
           JSON.stringify({
-            error:             mpData.message ?? mpData.error ?? "Payment provider rejected the request.",
-            details:           mpData.cause ?? mpData,
-            mp_status:         mpData.status,
-            mp_status_detail:  mpData.status_detail,
+            error: "MP API Error",
+            message: mpData?.message || mpData?.error || "Erro ao processar pagamento",
+            details: mpData?.cause || mpData,
+            mp_status: mpData?.status,
+            mp_status_detail: mpData?.status_detail,
           }),
           {
             status: 400,
